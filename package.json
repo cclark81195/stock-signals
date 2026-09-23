@@ -1,0 +1,10 @@
+{
+  "name": "index-signal-scanner",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pick an index, browse its stocks, and see Buy/Sell/Hold verdicts from five technical indicators.",
+  "engines": {
+    "node": ">=18"
+  }
+}

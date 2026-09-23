@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Index Signal Scanner</title>
+  <meta name="description" content="Browse the Dow 30 and S&P 500 with Buy / Sell / Hold verdicts from five technical indicators." />
+  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M6 22l6-7 5 4 9-11" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Index Signal Scanner</span>
+    </div>
+    <nav class="index-tabs" role="tablist" aria-label="Market index">
+      <button role="tab" data-index="dow" aria-selected="true">Dow 30</button>
+      <button role="tab" data-index="sp500" aria-selected="false">S&amp;P 500</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <section class="list-pane" aria-label="Stocks in index">
+      <div class="summary">
+        <button class="chip" data-signal="ALL"><span class="chip-label">All</span><strong id="count-all">-</strong></button>
+        <button class="chip buy" data-signal="BUY"><span class="dot"></span><span class="chip-label">Buy</span><strong id="count-buy">-</strong></button>
+        <button class="chip hold" data-signal="HOLD"><span class="dot"></span><span class="chip-label">Hold</span><strong id="count-hold">-</strong></button>
+        <button class="chip sell" data-signal="SELL"><span class="dot"></span><span class="chip-label">Sell</span><strong id="count-sell">-</strong></button>
+      </div>
+
+      <div class="filters">
+        <input id="search" type="search" placeholder="Search ticker or company" autocomplete="off" aria-label="Search" />
+        <select id="sector" aria-label="Sector"><option value="">All sectors</option></select>
+      </div>
+
+      <div class="progress" id="progress" hidden><div class="bar" id="progress-bar"></div></div>
+      <p class="status" id="status" role="status"></p>
+
+      <div class="table-wrap">
+        <table class="stocks" id="stocks">
+          <thead>
+            <tr>
+              <th data-sort="symbol" class="sortable">Stock</th>
+              <th data-sort="price" class="num sortable">Price</th>
+              <th data-sort="dayPct" class="num sortable">Day</th>
+              <th data-sort="m1Pct" class="num sortable hide-sm">1M</th>
+              <th data-sort="y1Pct" class="num sortable hide-sm">1Y</th>
+              <th data-sort="score" class="sortable center">Signal</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="footnote" id="source-note"></p>
+    </section>
+
+    <section class="detail-pane" id="detail" aria-label="Stock detail" aria-live="polite">
+      <div class="detail-empty" id="detail-empty">
+        <p>Select a stock to see its trend chart and indicator breakdown.</p>
+      </div>
+
+      <div class="detail-body" id="detail-body" hidden>
+        <button class="back" id="back" aria-label="Back to list">&larr; All stocks</button>
+        <div class="detail-head">
+          <div>
+            <h1 id="d-symbol"></h1>
+            <p class="company" id="d-company"></p>
+          </div>
+          <div class="price-block">
+            <div class="price" id="d-price"></div>
+            <div class="change" id="d-change"></div>
+          </div>
+        </div>
+
+        <div class="verdict" id="d-verdict">
+          <div>
+            <div class="verdict-label">Technical verdict</div>
+            <div class="verdict-value" id="d-verdict-value"></div>
+          </div>
+          <div class="votes" id="d-votes" aria-hidden="true"></div>
+          <div class="verdict-score" id="d-score"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-top">
+            <div class="periods" role="group" aria-label="Chart period" id="periods">
+              <button data-period="1D">1D</button><button data-period="1W">1W</button><button data-period="1M">1M</button>
+              <button data-period="3M">3M</button><button data-period="1Y">1Y</button><button data-period="5Y">5Y</button>
+            </div>
+            <div class="period-change" id="period-change"></div>
+          </div>
+          <div class="chart" id="chart"></div>
+          <div class="legend" id="legend" hidden>
+            <label><input type="checkbox" id="show-ma" /> Show 50 &amp; 200-day averages</label>
+            <span class="key key-price">Price</span>
+            <span class="key key-ma50">50-day</span>
+            <span class="key key-ma200">200-day</span>
+          </div>
+        </div>
+
+        <h2>Indicator breakdown</h2>
+        <div class="indicators" id="d-indicators"></div>
+        <p class="footnote" id="d-asof"></p>
+      </div>
+    </section>
+  </main>
+
+  <details class="about">
+    <summary>How the verdict works</summary>
+    <p>Each indicator looks at the latest <strong>daily</strong> data and votes Buy (+1), Sell (-1) or Neutral (0):</p>
+    <ul>
+      <li><strong>RSI (14):</strong> below 30 buy, above 70 sell</li>
+      <li><strong>MACD (12, 26, 9):</strong> MACD line above its signal line buy, below sell</li>
+      <li><strong>50 vs 200-day moving average:</strong> 50-day above 200-day buy, below sell</li>
+      <li><strong>Bollinger Bands (20, 2):</strong> price in the bottom fifth of the bands buy, top fifth sell</li>
+      <li><strong>Stochastic (14, 3):</strong> below 20 buy, above 80 sell</li>
+    </ul>
+    <p>Votes are added up: <strong>+3 or more = BUY</strong>, <strong>-3 or less = SELL</strong>, anything in between = <strong>HOLD</strong>. Trend indicators and overbought/oversold indicators often disagree, so HOLD is the most common result.</p>
+  </details>
+
+  <footer class="disclaimer">
+    Prices from Yahoo Finance, usually delayed about 15 minutes and refreshed every 15 minutes.
+    Signals are mechanical rules applied to past prices, not predictions, and nothing here is financial advice.
+  </footer>
+
+  <div class="tooltip" id="tooltip" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
