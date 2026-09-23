@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Index Signal Scanner</title>
-  <meta name="description" content="Browse the Dow 30 and S&P 500 with Buy / Sell / Hold verdicts from five technical indicators." />
+  <meta name="description" content="Browse the Dow 30, S&P 500 and Nasdaq-100 with Buy / Sell / Hold verdicts from five technical indicators." />
   <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
@@ -19,6 +19,7 @@
     <nav class="index-tabs" role="tablist" aria-label="Market index">
       <button role="tab" data-index="dow" aria-selected="true">Dow 30</button>
       <button role="tab" data-index="sp500" aria-selected="false">S&amp;P 500</button>
+      <button role="tab" data-index="nasdaq100" aria-selected="false">Nasdaq-100</button>
     </nav>
   </header>
 
@@ -48,6 +49,7 @@
               <th data-sort="dayPct" class="num sortable">Day</th>
               <th data-sort="m1Pct" class="num sortable hide-sm">1M</th>
               <th data-sort="y1Pct" class="num sortable hide-sm">1Y</th>
+              <th data-sort="pe" class="num sortable" title="Price / earnings, trailing 12 months">P/E</th>
               <th data-sort="score" class="sortable center">Signal</th>
             </tr>
           </thead>
@@ -80,8 +82,25 @@
             <div class="verdict-label">Technical verdict</div>
             <div class="verdict-value" id="d-verdict-value"></div>
           </div>
-          <div class="votes" id="d-votes" aria-hidden="true"></div>
+          <div class="votes" id="d-votes"></div>
           <div class="verdict-score" id="d-score"></div>
+          <div class="vote-key">Each circle is one indicator's vote: <strong class="pos">+ Buy</strong>, <strong class="neg">&minus; Sell</strong>, 0 Neutral. A total of +3 or more is a BUY, &minus;3 or less a SELL.</div>
+        </div>
+
+        <div class="valuation" id="d-valuation">
+          <div class="val">
+            <div class="val-label">P/E (TTM)</div>
+            <div class="val-value" id="d-pe">-</div>
+          </div>
+          <div class="val">
+            <div class="val-label" id="d-sector-label">Sector avg P/E</div>
+            <div class="val-value" id="d-sector-pe">-</div>
+          </div>
+          <div class="val">
+            <div class="val-label">Forward P/E</div>
+            <div class="val-value" id="d-fpe">-</div>
+          </div>
+          <p class="val-note" id="d-pe-note"></p>
         </div>
 
         <div class="chart-card">
@@ -119,6 +138,7 @@
       <li><strong>Stochastic (14, 3):</strong> below 20 buy, above 80 sell</li>
     </ul>
     <p>Votes are added up: <strong>+3 or more = BUY</strong>, <strong>-3 or less = SELL</strong>, anything in between = <strong>HOLD</strong>. Trend indicators and overbought/oversold indicators often disagree, so HOLD is the most common result.</p>
+    <p><strong>P/E</strong> is the share price divided by the last 12 months of earnings per share; it's blank for companies with negative earnings. The <strong>sector average</strong> is the plain average P/E of every profitable S&amp;P 500 company in the same sector, so it's the same yardstick whichever index you're browsing. P/E is shown for context only and doesn't affect the verdict.</p>
   </details>
 
   <footer class="disclaimer">

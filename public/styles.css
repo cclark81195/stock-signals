@@ -181,13 +181,29 @@ table.stocks { width: 100%; border-collapse: collapse; }
 .verdict.SELL .verdict-value { color: var(--sell); }
 .verdict.HOLD .verdict-value { color: var(--hold); }
 .verdict.NA .verdict-value { color: var(--neutral); font-size: 1.3rem; }
-.votes { display: flex; gap: 6px; justify-content: center; }
-.votes span { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 0.8rem; font-weight: 800; }
-.votes .v1 { background: var(--buy); color: #fff; }
-.votes .v-1 { background: var(--sell); color: #fff; }
-.votes .v0 { background: var(--surface); color: var(--neutral); border: 1px solid var(--border); }
+.votes { display: flex; gap: 4px; justify-content: center; }
+.vote-dot { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 50px; line-height: 1.15; }
+.vote-dot i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 0.8rem; font-weight: 800; font-style: normal; }
+.vote-dot b { font-size: 0.7rem; font-weight: 700; }
+.vote-dot small { font-size: 0.66rem; color: var(--text-2); }
+.vote-dot.v1 i { background: var(--buy); color: #fff; }
+.vote-dot.v-1 i { background: var(--sell); color: #fff; }
+.vote-dot.v0 i { background: var(--surface); color: var(--neutral); border: 1px solid var(--border); }
+.vote-dot.v1 b { color: var(--buy); }
+.vote-dot.v-1 b { color: var(--sell); }
+.vote-dot.v0 b { color: var(--neutral); }
+.vote-key { grid-column: 1 / -1; font-size: 0.78rem; color: var(--text-2); border-top: 1px solid color-mix(in srgb, var(--text) 10%, transparent); padding-top: 10px; }
 .verdict-score { text-align: right; font-size: 0.85rem; color: var(--text-2); }
 .verdict-score strong { display: block; font-size: 1.2rem; color: var(--text); font-variant-numeric: tabular-nums; }
+
+.valuation {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px;
+}
+.val { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.val-label { font-size: 0.75rem; color: var(--text-2); font-weight: 600; overflow-wrap: anywhere; }
+.val-value { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.val-note { grid-column: 1 / -1; margin: 0 2px; font-size: 0.8rem; color: var(--muted); }
+.val-note:empty { display: none; }
 
 .chart-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
 .chart-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -237,12 +253,11 @@ table.stocks { width: 100%; border-collapse: collapse; }
 /* ---- Phones & small tablets ---- */
 @media (max-width: 1000px) {
   .layout { grid-template-columns: 1fr; padding: 12px; }
-  .detail-pane {
-    display: none; position: fixed; inset: 0; top: 0; z-index: 30; max-height: none; border-radius: 0; border: 0;
-    padding: 16px max(16px, env(safe-area-inset-left)) 32px; overflow-y: auto;
-  }
+  /* The detail replaces the list in the normal page flow, so the page itself
+     scrolls (a fixed, separately scrolling overlay wouldn't scroll on some phones). */
+  .detail-pane { display: none; position: static; max-height: none; overflow: visible; padding: 16px; }
   .detail-pane.open { display: block; }
-  body.detail-open { overflow: hidden; }
+  body.detail-open .list-pane, body.detail-open .about { display: none; }
   .back {
     display: inline-block; border: 0; background: var(--surface-2); padding: 7px 12px; border-radius: 9px;
     font-weight: 600; margin-bottom: 14px;
@@ -258,7 +273,12 @@ table.stocks { width: 100%; border-collapse: collapse; }
   .chip { flex-direction: column; gap: 0; padding: 8px 4px; }
   .chip .dot { display: none; }
   .verdict { grid-template-columns: 1fr auto; }
-  .votes { grid-column: 1 / -1; justify-content: flex-start; order: 3; }
+  .votes { grid-column: 1 / -1; justify-content: space-between; order: 3; }
+  .vote-dot { min-width: 0; flex: 1; }
+  .vote-key { order: 4; }
+  .valuation { gap: 8px; }
+  .val { padding: 8px 10px; }
+  .val-value { font-size: 1.1rem; }
   .chart { height: 230px; }
   .periods button { padding: 5px 9px; }
 }

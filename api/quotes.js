@@ -1,8 +1,8 @@
 // GET /api/quotes?symbols=AAPL,MSFT,...   (up to 60 symbols)
-// Price, recent performance and the 5-indicator verdict for each symbol.
+// Price, recent performance, P/E and the 5-indicator verdict for each symbol.
 // Responses are cached at Vercel's edge for 15 minutes, so everyone who opens
 // the site in that window shares one set of Yahoo requests.
-import { fetchChart, mapLimit } from "../lib/yahoo.js";
+import { fetchChart, fetchValuations, mapLimit } from "../lib/yahoo.js";
 import { evaluate } from "../lib/indicators.js";
 
 const MAX_SYMBOLS = 60;
@@ -45,9 +45,18 @@ export default async function handler(req, res) {
     return;
   }
 
-  const results = await mapLimit(symbols, 8, (s) => fetchChart(s, "2y", "1d").then(summarize));
+  // P/E is a nice-to-have: if Yahoo refuses it, prices and verdicts still load.
+  const [results, valuations] = await Promise.all([
+    mapLimit(symbols, 8, (s) => fetchChart(s, "2y", "1d").then(summarize)),
+    fetchValuations(symbols).catch(() => ({})),
+  ]);
   const rows = {}, errors = {};
-  results.forEach((r, i) => (r.ok ? (rows[symbols[i]] = r.value) : (errors[symbols[i]] = r.error)));
+  results.forEach((r, i) => {
+    const s = symbols[i];
+    if (!r.ok) { errors[s] = r.error; return; }
+    const v = valuations[s] || {};
+    rows[s] = { ...r.value, pe: v.pe ?? null, forwardPE: v.forwardPE ?? null };
+  });
 
   const failed = Object.keys(errors).length;
   // Don't cache a mostly-failed response (e.g. Yahoo throttling) for long.
