@@ -7,13 +7,16 @@
   <meta name="description" content="Browse the Dow 30, S&P 500 and Nasdaq-100 with Buy / Sell / Hold verdicts from five technical indicators." />
   <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><path d='M6 22l6-7 5 4 9-11' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
+  <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+  <link rel="icon" href="favicon-48.png" type="image/png" sizes="48x48" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M6 22l6-7 5 4 9-11" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <img class="logo" src="logo.png" width="76" height="56" alt="FFS Global" />
       <span>Index Signal Scanner</span>
     </div>
     <nav class="index-tabs" role="tablist" aria-label="Market index">
@@ -47,9 +50,10 @@
               <th data-sort="symbol" class="sortable">Stock</th>
               <th data-sort="price" class="num sortable">Price</th>
               <th data-sort="dayPct" class="num sortable">Day</th>
-              <th data-sort="m1Pct" class="num sortable hide-sm">1M</th>
-              <th data-sort="y1Pct" class="num sortable hide-sm">1Y</th>
+              <th data-sort="m1Pct" class="num sortable">1M</th>
+              <th data-sort="y1Pct" class="num sortable">1Y</th>
               <th data-sort="pe" class="num sortable" title="Price / earnings, trailing 12 months">P/E</th>
+              <th data-sort="sectorPE" class="num sortable" title="Average P/E of profitable S&amp;P 500 companies in the same sector">Sector P/E</th>
               <th data-sort="score" class="sortable center">Signal</th>
             </tr>
           </thead>
@@ -121,6 +125,7 @@
         </div>
 
         <h2>Indicator breakdown</h2>
+        <p class="hint">Tap an indicator to see what it means, with an example.</p>
         <div class="indicators" id="d-indicators"></div>
         <p class="footnote" id="d-asof"></p>
       </div>

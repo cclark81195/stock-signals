@@ -56,12 +56,16 @@ Each indicator looks at the latest **daily** data and votes **+1 (buy)**, **-1 (
 | Bollinger Bands (20, 2 std dev) | price in the bottom 20% of the bands or below | price in the top 20% or above |
 | Stochastic (14, 3) | %K below 20 | %K above 80 |
 
+Tap any indicator on a stock's page for a plain-English explanation with an example.
+
 Votes are added up: **+3 or more = BUY**, **-3 or less = SELL**, anything else = **HOLD**. Expect HOLD most of the time: two indicators follow the trend and three look for overbought/oversold conditions, so they often disagree.
 
 ## P/E ratios
 - **P/E (TTM):** share price divided by the last 12 months of earnings per share. It's blank for companies that lost money.
 - **Forward P/E:** the same, using analysts' estimate of the next 12 months' earnings.
 - **Sector average P/E:** the plain average P/E of every profitable S&P 500 company in the same sector. The S&P 500 is used as the yardstick for every index, so a Dow or Nasdaq-100 stock is compared against a full sector rather than a handful of companies. It's refreshed every 6 hours.
+
+The list shows each stock's P/E next to its sector's average (on phones, swipe the list sideways to see all columns).
 
 P/E is shown for context only; it doesn't change the BUY / SELL / HOLD verdict.
 
