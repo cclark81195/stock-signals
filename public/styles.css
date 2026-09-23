@@ -74,6 +74,7 @@ h1, h2 { margin: 0; }
   border-bottom: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
+.brand .logo { display: block; height: 56px; width: auto; border-radius: 8px; background: #000; }
 .index-tabs { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
 .index-tabs button {
   border: 0; background: transparent; padding: 6px 14px; border-radius: 8px; font-weight: 600; color: var(--text-2);
@@ -87,8 +88,8 @@ h1, h2 { margin: 0; }
 }
 .list-pane, .detail-pane { min-width: 0; }
 .detail-pane {
-  position: sticky; top: 76px; align-self: start;
-  max-height: calc(100vh - 96px); overflow-y: auto;
+  position: sticky; top: 92px; align-self: start;
+  max-height: calc(100vh - 112px); overflow-y: auto;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 20px;
 }
@@ -283,6 +284,7 @@ table.stocks { width: 100%; border-collapse: collapse; }
 @media (max-width: 640px) {
   :root { font-size: 14px; }
   .brand span { display: none; }
+  .brand .logo { height: 44px; }
   .hide-sm { display: none; }
   .stocks td, .stocks th { padding: 9px 8px; }
   .co { max-width: 130px; }
