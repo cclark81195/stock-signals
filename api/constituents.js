@@ -1,4 +1,4 @@
-// GET /api/constituents?index=dow|sp500
+// GET /api/constituents?index=dow|sp500|nasdaq100
 // Members of the index. Cached at Vercel's edge for a day.
 import { getConstituents } from "../lib/constituents.js";
 

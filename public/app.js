@@ -15,6 +15,8 @@ const state = {
   search: "",
   sector: "",
   sort: { key: "symbol", dir: "asc" },
+  sectorPE: null,  // { basis, sectors: { name: { avgPE, count } } }
+  listScroll: 0,
   selected: null,
   period: "1Y",
   showMA: false,
@@ -30,6 +32,11 @@ const money = (x) => (x == null ? "-" : "$" + x.toLocaleString("en-US", { minimu
 const pct = (x) => (x == null ? "-" : `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(2)}%`);
 const cls = (x) => (x == null || x === 0 ? "" : x > 0 ? "pos" : "neg");
 const signalClass = (s) => (s === "N/A" || !s ? "NA" : s);
+const ratio = (x) => (x == null ? "-" : x >= 1000 ? Math.round(x).toLocaleString("en-US") : x.toFixed(1));
+const INDEX_KEYS = ["dow", "sp500", "nasdaq100"];
+const VOTE_LABEL = { 1: "Buy", "-1": "Sell", 0: "Neutral" };
+const VOTE_SIGN = { 1: "+", "-1": "−", 0: "0" };
+const shortName = (name) => ({ "Moving averages": "MA", "Bollinger Bands": "Bollinger", Stochastic: "Stoch" }[name.split(" (")[0]] || name.split(" (")[0]);
 
 async function getJSON(url) {
   const r = await fetch(url);
@@ -41,7 +48,7 @@ async function getJSON(url) {
 // ---------------------------------------------------------------- URL state
 function readHash() {
   const [idx, sym] = location.hash.replace(/^#\/?/, "").split("/");
-  return { index: idx === "sp500" ? "sp500" : "dow", symbol: sym ? decodeURIComponent(sym).toUpperCase() : null };
+  return { index: INDEX_KEYS.includes(idx) ? idx : "dow", symbol: sym ? decodeURIComponent(sym).toUpperCase() : null };
 }
 function writeHash() {
   const h = `#${state.index}${state.selected ? "/" + encodeURIComponent(state.selected) : ""}`;
@@ -49,6 +56,16 @@ function writeHash() {
 }
 
 // ---------------------------------------------------------------- loading
+// Sector P/E averages don't depend on the index, so load them once.
+async function loadSectorPE() {
+  try {
+    state.sectorPE = await getJSON("/api/sector-pe");
+  } catch {
+    state.sectorPE = { error: true, sectors: {} };
+  }
+  if (state.selected) renderDetailSummary();
+}
+
 async function loadIndex(index, selectSymbol = null) {
   const token = ++state.loadToken;
   state.index = index;
@@ -165,7 +182,7 @@ function renderRows() {
   const list = currentList();
   if (!state.members.length) { $("rows").innerHTML = ""; return; }
   if (!list.length) {
-    $("rows").innerHTML = `<tr><td colspan="6" class="pending" style="text-align:center;padding:24px">No stocks match these filters.</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="7" class="pending" style="text-align:center;padding:24px">No stocks match these filters.</td></tr>`;
     return;
   }
   $("rows").innerHTML = list.map((r) => {
@@ -178,6 +195,7 @@ function renderRows() {
       <td class="num ${cls(r.dayPct)}">${has ? pct(r.dayPct) : ""}</td>
       <td class="num hide-sm ${cls(r.m1Pct)}">${has ? pct(r.m1Pct) : ""}</td>
       <td class="num hide-sm ${cls(r.y1Pct)}">${has ? pct(r.y1Pct) : ""}</td>
+      <td class="num">${has ? ratio(r.pe) : ""}</td>
       <td class="center">${sig ? `<span class="badge ${signalClass(sig)}">${esc(sig)}</span>` : ""}</td>
     </tr>`;
   }).join("");
@@ -191,7 +209,13 @@ function selectStock(symbol, { scroll = false } = {}) {
   $("detail-empty").hidden = true;
   $("detail-body").hidden = false;
   $("detail").classList.add("open");
-  if (matchMedia("(max-width: 1000px)").matches) document.body.classList.add("detail-open");
+  // On phones the detail replaces the list in the normal page flow (rather than
+  // a fixed overlay), so the page scrolls natively. Remember where the list was.
+  if (matchMedia("(max-width: 1000px)").matches) {
+    if (!document.body.classList.contains("detail-open")) state.listScroll = window.scrollY;
+    document.body.classList.add("detail-open");
+    window.scrollTo(0, 0);
+  }
   $("detail").scrollTop = 0;
   renderDetailSummary();
   loadChart();
@@ -199,8 +223,10 @@ function selectStock(symbol, { scroll = false } = {}) {
 }
 
 function closeDetail(updateHash = true) {
+  const wasOpen = document.body.classList.contains("detail-open");
   $("detail").classList.remove("open");
   document.body.classList.remove("detail-open");
+  if (wasOpen) window.scrollTo(0, state.listScroll);
   if (updateHash) { state.selected = null; writeHash(); renderRows(); $("detail-empty").hidden = false; $("detail-body").hidden = true; }
   else { $("detail-empty").hidden = false; $("detail-body").hidden = true; }
 }
@@ -220,11 +246,15 @@ function renderDetailSummary() {
   box.className = `verdict ${signalClass(verdict === "..." ? "N/A" : verdict)}`;
   $("d-verdict-value").textContent = verdict === "N/A" ? "Not enough data" : verdict;
 
+  renderValuation(sym, info, r);
+
   if (r?.indicators) {
-    $("d-votes").innerHTML = r.indicators.map((i) => `<span class="v${i.vote}">${i.vote > 0 ? "+" : i.vote < 0 ? "−" : "0"}</span>`).join("");
-    $("d-score").innerHTML = `<strong>${r.score > 0 ? "+" : ""}${r.score} / 5</strong>score`;
+    $("d-votes").innerHTML = r.indicators.map((i) => `<span class="vote-dot v${i.vote}" title="${esc(i.name)}: ${VOTE_LABEL[i.vote]}">
+        <i aria-hidden="true">${VOTE_SIGN[i.vote]}</i><b>${VOTE_LABEL[i.vote]}</b><small>${esc(shortName(i.name))}</small>
+      </span>`).join("");
+    $("d-score").innerHTML = `<strong>${r.score > 0 ? "+" : r.score < 0 ? "−" : ""}${Math.abs(r.score)} / 5</strong>score`;
     $("d-indicators").innerHTML = r.indicators.map((i) => {
-      const label = i.vote > 0 ? "Buy" : i.vote < 0 ? "Sell" : "Neutral";
+      const label = `${VOTE_SIGN[i.vote]}${i.vote ? "1" : ""} ${VOTE_LABEL[i.vote]}`;
       return `<div class="ind">
         <div class="ind-name">${esc(i.name)}</div>
         <div class="ind-value">${esc(i.value)}</div>
@@ -244,6 +274,28 @@ function renderDetailSummary() {
         : `<p class="footnote">Loading...</p>`;
     $("d-asof").textContent = "";
   }
+}
+
+function renderValuation(sym, info, r) {
+  const sp = state.sectorPE;
+  const sec = sp?.sectors?.[info.sector];
+  const avg = sec?.avgPE ?? null;
+  $("d-pe").textContent = r ? (r.pe == null ? "n/a" : ratio(r.pe)) : "...";
+  $("d-fpe").textContent = r ? (r.forwardPE == null ? "n/a" : ratio(r.forwardPE)) : "...";
+  $("d-sector-label").textContent = info.sector ? `${info.sector} avg P/E` : "Sector avg P/E";
+  $("d-sector-pe").textContent = !sp ? "..." : avg == null ? "n/a" : ratio(avg);
+
+  let note = "";
+  if (r && r.pe == null && r.forwardPE == null) note = "P/E isn't available for this stock right now (it may have negative earnings).";
+  else if (r && r.pe == null) note = "No trailing P/E because earnings over the last 12 months were negative.";
+  else if (r && avg != null) {
+    const diff = (r.pe / avg - 1) * 100;
+    const word = Math.abs(diff) < 5 ? "about in line with" : diff > 0 ? `${Math.round(diff)}% above` : `${Math.round(-diff)}% below`;
+    note = `${sym}'s P/E is ${word} the ${info.sector} average` +
+      ` (${sec.count} profitable ${sp.basis} companies). Higher can mean the market expects faster growth, or that it's pricier.`;
+  }
+  if (sp?.error) note = (note ? note + " " : "") + "Sector averages couldn't be loaded right now.";
+  $("d-pe-note").textContent = note;
 }
 
 // ---------------------------------------------------------------- chart
@@ -461,5 +513,6 @@ function wire() {
 }
 
 wire();
+loadSectorPE();
 const start = readHash();
 loadIndex(start.index, start.symbol);
