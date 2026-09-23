@@ -17,6 +17,7 @@ const state = {
   sort: { key: "symbol", dir: "asc" },
   sectorPE: null,  // { basis, sectors: { name: { avgPE, count } } }
   listScroll: 0,
+  openInd: null,   // short name of the indicator whose explanation is open
   selected: null,
   period: "1Y",
   showMA: false,
@@ -36,6 +37,29 @@ const ratio = (x) => (x == null ? "-" : x >= 1000 ? Math.round(x).toLocaleString
 const INDEX_KEYS = ["dow", "sp500", "nasdaq100"];
 const VOTE_LABEL = { 1: "Buy", "-1": "Sell", 0: "Neutral" };
 const VOTE_SIGN = { 1: "+", "-1": "−", 0: "0" };
+// Plain-English help shown when an indicator card is tapped.
+const INDICATOR_HELP = {
+  RSI: {
+    what: "The Relative Strength Index measures how fast and how far the price has moved over the last 14 days, on a scale of 0 to 100. A very high reading means the stock has risen a lot quickly and may be due to cool off; a very low reading means it has fallen a lot and may bounce back.",
+    example: "A stock rises on 11 of the last 14 days and its RSI reaches 78. That's above 70, so it's \"overbought\" and RSI votes Sell. If instead it fell most days and RSI dropped to 24, that's below 30 (\"oversold\") and RSI votes Buy.",
+  },
+  MACD: {
+    what: "MACD compares a fast (12-day) and a slow (26-day) average of the price. The MACD line is the gap between them, and the signal line is a smoothed (9-day) version of that gap. When MACD is above its signal line, upward momentum is building.",
+    example: "MACD is 1.20 and its signal line is 0.85. MACD is above the signal line, so momentum is turning up and MACD votes Buy. If MACD were -0.40 with the signal at -0.10, it would be below and vote Sell.",
+  },
+  MA: {
+    what: "Compares the average closing price over the last 50 days with the average over the last 200 days. When the shorter-term average is above the longer-term one, the stock is in an uptrend; when it's below, a downtrend.",
+    example: "The 50-day average is $182 and the 200-day average is $170. The recent average is higher, so the stock is trending up and this votes Buy. If the 50-day were $95 and the 200-day $110, it would be trending down and vote Sell.",
+  },
+  Bollinger: {
+    what: "Bollinger Bands are drawn above and below the 20-day average price, 2 standard deviations away, so they widen when the price swings a lot. %B shows where today's price sits: 0% is the lower band and 100% the upper band. Near the bottom suggests the price is low for its recent range; near the top, high.",
+    example: "The bands are at $90 and $110 and the price is $92, so %B is 10%. That's in the bottom fifth of the bands, so this votes Buy. At $109 (%B 95%) it would be in the top fifth and vote Sell.",
+  },
+  Stoch: {
+    what: "The Stochastic oscillator shows where today's closing price sits within the high-to-low range of the last 14 days, from 0 (at the low) to 100 (at the high), smoothed over 3 days. Readings near the top can mean the stock is overbought; near the bottom, oversold.",
+    example: "Over the last 14 days the stock traded between $40 and $50 and closed at $49, so %K is 90. That's above 80, so it votes Sell. A close of $41 would give %K 10, below 20, and vote Buy.",
+  },
+};
 const shortName = (name) => ({ "Moving averages": "MA", "Bollinger Bands": "Bollinger", Stochastic: "Stoch" }[name.split(" (")[0]] || name.split(" (")[0]);
 
 async function getJSON(url) {
@@ -63,6 +87,7 @@ async function loadSectorPE() {
   } catch {
     state.sectorPE = { error: true, sectors: {} };
   }
+  renderRows();
   if (state.selected) renderDetailSummary();
 }
 
@@ -150,7 +175,8 @@ function fillSectors() {
 
 function currentList() {
   const q = state.search.trim().toLowerCase();
-  let list = state.members.map((m) => ({ ...m, ...(state.rows[m.symbol] || {}) }));
+  const sectors = state.sectorPE?.sectors || {};
+  let list = state.members.map((m) => ({ ...m, ...(state.rows[m.symbol] || {}), sectorPE: sectors[m.sector]?.avgPE ?? null }));
   if (state.signal !== "ALL") list = list.filter((r) => r.signal === state.signal);
   if (state.sector) list = list.filter((r) => r.sector === state.sector);
   if (q) list = list.filter((r) => r.symbol.toLowerCase().includes(q) || (r.company || "").toLowerCase().includes(q));
@@ -182,7 +208,7 @@ function renderRows() {
   const list = currentList();
   if (!state.members.length) { $("rows").innerHTML = ""; return; }
   if (!list.length) {
-    $("rows").innerHTML = `<tr><td colspan="7" class="pending" style="text-align:center;padding:24px">No stocks match these filters.</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="8" class="pending" style="text-align:center;padding:24px">No stocks match these filters.</td></tr>`;
     return;
   }
   $("rows").innerHTML = list.map((r) => {
@@ -193,9 +219,10 @@ function renderRows() {
       <td><div class="sym">${esc(r.symbol)}</div><div class="co">${esc(r.company)}</div></td>
       <td class="num">${has ? money(r.price) : `<span class="pending">${failed ? "n/a" : "..."}</span>`}</td>
       <td class="num ${cls(r.dayPct)}">${has ? pct(r.dayPct) : ""}</td>
-      <td class="num hide-sm ${cls(r.m1Pct)}">${has ? pct(r.m1Pct) : ""}</td>
-      <td class="num hide-sm ${cls(r.y1Pct)}">${has ? pct(r.y1Pct) : ""}</td>
+      <td class="num ${cls(r.m1Pct)}">${has ? pct(r.m1Pct) : ""}</td>
+      <td class="num ${cls(r.y1Pct)}">${has ? pct(r.y1Pct) : ""}</td>
       <td class="num">${has ? ratio(r.pe) : ""}</td>
+      <td class="num sector-pe">${state.sectorPE ? ratio(r.sectorPE) : ""}</td>
       <td class="center">${sig ? `<span class="badge ${signalClass(sig)}">${esc(sig)}</span>` : ""}</td>
     </tr>`;
   }).join("");
@@ -249,17 +276,24 @@ function renderDetailSummary() {
   renderValuation(sym, info, r);
 
   if (r?.indicators) {
-    $("d-votes").innerHTML = r.indicators.map((i) => `<span class="vote-dot v${i.vote}" title="${esc(i.name)}: ${VOTE_LABEL[i.vote]}">
+    $("d-votes").innerHTML = r.indicators.map((i) => `<button type="button" class="vote-dot v${i.vote}" data-ind="${esc(shortName(i.name))}" title="${esc(i.name)}: ${VOTE_LABEL[i.vote]}">
         <i aria-hidden="true">${VOTE_SIGN[i.vote]}</i><b>${VOTE_LABEL[i.vote]}</b><small>${esc(shortName(i.name))}</small>
-      </span>`).join("");
+      </button>`).join("");
     $("d-score").innerHTML = `<strong>${r.score > 0 ? "+" : r.score < 0 ? "−" : ""}${Math.abs(r.score)} / 5</strong>score`;
     $("d-indicators").innerHTML = r.indicators.map((i) => {
       const label = `${VOTE_SIGN[i.vote]}${i.vote ? "1" : ""} ${VOTE_LABEL[i.vote]}`;
-      return `<div class="ind">
-        <div class="ind-name">${esc(i.name)}</div>
+      const key = shortName(i.name);
+      const help = INDICATOR_HELP[key];
+      const open = state.openInd === key;
+      return `<div class="ind${open ? " open" : ""}" data-ind="${esc(key)}" role="button" tabindex="0" aria-expanded="${open}">
+        <div class="ind-name">${esc(i.name)} <span class="ind-more" aria-hidden="true">${open ? "Hide" : "What's this?"}</span></div>
         <div class="ind-value">${esc(i.value)}</div>
         <span class="vote v${i.vote}">${label}</span>
         <div class="ind-rule">${esc(i.rule)}</div>
+        ${open && help ? `<div class="ind-help">
+          <p>${esc(help.what)}</p>
+          <p><strong>Example:</strong> ${esc(help.example)}</p>
+        </div>` : ""}
       </div>`;
     }).join("");
     const d = new Date(r.asOf * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
@@ -493,6 +527,29 @@ function wire() {
   });
 
   $("back").addEventListener("click", () => closeDetail(true));
+
+  // Tapping an indicator card (or its vote circle) opens its explanation.
+  const toggleInd = (key, scroll) => {
+    state.openInd = state.openInd === key ? null : key;
+    renderDetailSummary();
+    if (scroll && state.openInd) document.querySelector(`#d-indicators .ind[data-ind="${CSS.escape(key)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+  $("d-indicators").addEventListener("click", (e) => {
+    const card = e.target.closest(".ind[data-ind]");
+    if (card) toggleInd(card.dataset.ind);
+  });
+  $("d-indicators").addEventListener("keydown", (e) => {
+    const card = e.target.closest(".ind[data-ind]");
+    if (card && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      toggleInd(card.dataset.ind);
+      document.querySelector(`#d-indicators .ind[data-ind="${CSS.escape(card.dataset.ind)}"]`)?.focus();
+    }
+  });
+  $("d-votes").addEventListener("click", (e) => {
+    const dot = e.target.closest(".vote-dot[data-ind]");
+    if (dot) { state.openInd = null; toggleInd(dot.dataset.ind, true); }
+  });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("detail").classList.contains("open")) closeDetail(true); });
 
   document.querySelectorAll("#periods button").forEach((b) =>

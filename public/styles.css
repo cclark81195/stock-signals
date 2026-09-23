@@ -125,7 +125,7 @@ h1, h2 { margin: 0; }
 /* ---- Table ---- */
 .table-wrap {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow); overflow: hidden;
+  box-shadow: var(--shadow); overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
 }
 table.stocks { width: 100%; border-collapse: collapse; }
 .stocks th {
@@ -141,6 +141,15 @@ table.stocks { width: 100%; border-collapse: collapse; }
 .stocks td { padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .stocks tbody tr:last-child td { border-bottom: 0; }
 .stocks tbody tr { cursor: pointer; }
+/* Keep the stock name in view while the other columns scroll sideways. */
+.stocks th:first-child, .stocks td:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--surface);
+  box-shadow: inset -1px 0 0 var(--border);
+}
+.stocks th:first-child { z-index: 2; }
+.stocks tbody tr:hover td:first-child { background: var(--surface-2); }
+.stocks tbody tr.selected td:first-child { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.stocks td.sector-pe { color: var(--text-2); }
 .stocks tbody tr:hover { background: var(--surface-2); }
 .stocks tbody tr.selected { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .stocks tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -182,7 +191,7 @@ table.stocks { width: 100%; border-collapse: collapse; }
 .verdict.HOLD .verdict-value { color: var(--hold); }
 .verdict.NA .verdict-value { color: var(--neutral); font-size: 1.3rem; }
 .votes { display: flex; gap: 4px; justify-content: center; }
-.vote-dot { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 50px; line-height: 1.15; }
+.vote-dot { border: 0; background: none; padding: 0; color: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 50px; line-height: 1.15; }
 .vote-dot i { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 0.8rem; font-weight: 800; font-style: normal; }
 .vote-dot b { font-size: 0.7rem; font-weight: 700; }
 .vote-dot small { font-size: 0.66rem; color: var(--text-2); }
@@ -226,7 +235,15 @@ table.stocks { width: 100%; border-collapse: collapse; }
 
 .detail-body h2 { font-size: 1.05rem; margin: 20px 0 10px; }
 .indicators { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.ind { border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.ind { border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+.ind:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.ind:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ind.open { grid-column: 1 / -1; border-color: var(--accent); }
+.ind-more { float: right; font-weight: 600; color: var(--accent); font-size: 0.72rem; }
+.ind-help { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 0.88rem; color: var(--text); }
+.ind-help p { margin: 0 0 8px; }
+.ind-help p:last-child { margin-bottom: 0; }
+.hint { margin: -4px 0 10px; font-size: 0.8rem; color: var(--muted); }
 .ind-name { font-size: 0.8rem; color: var(--text-2); font-weight: 600; }
 .ind-value { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ind-rule { font-size: 0.8rem; color: var(--muted); }
