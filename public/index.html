@@ -48,6 +48,8 @@
         <table class="stocks" id="stocks">
           <thead>
             <tr>
+              <th data-sort="signal" class="center sortable" title="Buy / Hold / Sell verdict">Signal</th>
+              <th data-sort="score" class="num sortable" title="Sum of the ten indicator votes, from -10 (all bearish) to +10 (all bullish)">Score</th>
               <th data-sort="symbol" class="sortable">Stock</th>
               <th data-sort="price" class="num sortable">Price</th>
               <th data-sort="dayPct" class="num sortable">Day</th>
@@ -55,8 +57,9 @@
               <th data-sort="y1Pct" class="num sortable">1Y</th>
               <th data-sort="pe" class="num sortable" title="Price / earnings, trailing 12 months">P/E</th>
               <th data-sort="sectorPE" class="num sortable" title="Average P/E of profitable S&amp;P 500 companies in the same sector">Sector P/E</th>
-              <th class="center">Signal</th>
-              <th data-sort="score" class="num sortable" title="Sum of the ten indicator votes, from -10 (all bearish) to +10 (all bullish)">Score</th>
+              <th data-sort="avgVolume" class="num sortable" title="Average shares traded per day over the last three months">Avg volume</th>
+              <th data-sort="marketCap" class="num sortable" title="Share price times shares outstanding">Market cap</th>
+              <th data-sort="sector" class="sortable">Sector</th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>

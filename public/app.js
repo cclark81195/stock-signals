@@ -392,7 +392,8 @@ function currentList() {
   if (state.signal !== "ALL") list = list.filter((r) => r.signal === state.signal);
   if (state.sector) list = list.filter((r) => r.sector === state.sector);
   if (q) list = list.filter((r) => r.symbol.toLowerCase().includes(q) || (r.company || "").toLowerCase().includes(q));
-  const { key, dir } = state.sort;
+  const { dir } = state.sort;
+  const key = state.sort.key === "signal" ? "score" : state.sort.key;
   const mul = dir === "asc" ? 1 : -1;
   list.sort((a, b) => {
     const av = a[key], bv = b[key];
@@ -403,6 +404,14 @@ function currentList() {
     return mul * (av - bv) || a.symbol.localeCompare(b.symbol);
   });
   return list;
+}
+
+// 1.2T / 345.6B / 78.9M / 12.3K, or a dash when unknown.
+function compact(n, prefix) {
+  if (n == null || !isFinite(n)) return `<span class="pending">\u2013</span>`;
+  const units = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]];
+  for (const [v, u] of units) if (n >= v) return `${prefix}${(n / v).toFixed(n / v >= 100 ? 0 : n / v >= 10 ? 1 : 2)}${u}`;
+  return `${prefix}${Math.round(n)}`;
 }
 
 function fmtScore(n) {
@@ -424,7 +433,7 @@ function renderRows() {
   const list = currentList();
   if (!state.members.length) { $("rows").innerHTML = ""; return; }
   if (!list.length) {
-    $("rows").innerHTML = `<tr><td colspan="9" class="pending" style="text-align:center;padding:24px">No stocks match these filters.</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="12" class="pending" style="text-align:center;padding:24px">No stocks match these filters.</td></tr>`;
     return;
   }
   $("rows").innerHTML = list.map((r) => {
@@ -432,6 +441,8 @@ function renderRows() {
     const failed = !has && state.failed.has(r.symbol);
     const sig = has ? r.signal : failed ? "N/A" : "";
     return `<tr data-symbol="${esc(r.symbol)}" tabindex="0" class="${r.symbol === state.selected ? "selected" : ""}">
+      <td class="center">${sig ? `<span class="badge ${signalClass(sig)}">${esc(sig)}</span>` : ""}</td>
+      <td class="num score ${cls(r.score)}">${has && r.score != null ? fmtScore(r.score) : ""}</td>
       <td><div class="sym">${esc(r.symbol)}</div><div class="co">${esc(r.company)}</div></td>
       <td class="num">${has ? money(r.price) : `<span class="pending">${failed ? "n/a" : "..."}</span>`}</td>
       <td class="num ${cls(r.dayPct)}">${has ? pct(r.dayPct) : ""}</td>
@@ -439,8 +450,9 @@ function renderRows() {
       <td class="num ${cls(r.y1Pct)}">${has ? pct(r.y1Pct) : ""}</td>
       <td class="num">${has ? ratio(r.pe) : ""}</td>
       <td class="num sector-pe">${state.sectorPE ? ratio(r.sectorPE) : ""}</td>
-      <td class="center">${sig ? `<span class="badge ${signalClass(sig)}">${esc(sig)}</span>` : ""}</td>
-      <td class="num score ${cls(r.score)}">${has && r.score != null ? fmtScore(r.score) : ""}</td>
+      <td class="num">${has ? compact(r.avgVolume, "") : ""}</td>
+      <td class="num">${has ? compact(r.marketCap, "$") : ""}</td>
+      <td class="sector-name">${esc(r.sector || "")}</td>
     </tr>`;
   }).join("");
 }
@@ -743,7 +755,7 @@ function wire() {
     th.addEventListener("click", () => {
       const key = th.dataset.sort;
       if (state.sort.key === key) state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
-      else state.sort = { key, dir: key === "symbol" ? "asc" : "desc" };
+      else state.sort = { key, dir: key === "symbol" || key === "sector" ? "asc" : "desc" };
       renderRows();
     }));
 
