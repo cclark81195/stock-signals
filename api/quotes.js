@@ -1,5 +1,5 @@
 // GET /api/quotes?symbols=AAPL,MSFT,...   (up to 60 symbols)
-// Price, recent performance, P/E and the 5-indicator verdict for each symbol.
+// Price, recent performance, P/E and the 10-indicator verdict for each symbol.
 // Responses are cached at Vercel's edge for 15 minutes, so everyone who opens
 // the site in that window shares one set of Yahoo requests.
 import { fetchChart, fetchValuations, mapLimit } from "../lib/yahoo.js";
@@ -66,5 +66,7 @@ export default async function handler(req, res) {
       ? "public, s-maxage=60"
       : "public, s-maxage=900, stale-while-revalidate=3600",
   );
-  res.status(failed === symbols.length ? 502 : 200).json({ rows, errors });
+  // generatedAt lets the page show how fresh the data is, even when this
+  // response is served from Vercel's cache.
+  res.status(failed === symbols.length ? 502 : 200).json({ rows, errors, generatedAt: Math.floor(Date.now() / 1000) });
 }

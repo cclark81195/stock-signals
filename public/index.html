@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Index Signal Scanner</title>
-  <meta name="description" content="Browse the Dow 30, S&P 500 and Nasdaq-100 with Buy / Sell / Hold verdicts from five technical indicators." />
+  <meta name="description" content="Browse the Dow 30, S&P 500 and Nasdaq-100 with Buy / Sell / Hold verdicts from ten technical indicators." />
   <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)" />
   <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
@@ -24,6 +24,7 @@
       <button role="tab" data-index="sp500" aria-selected="false">S&amp;P 500</button>
       <button role="tab" data-index="nasdaq100" aria-selected="false">Nasdaq-100</button>
     </nav>
+    <p class="updated" id="last-updated" role="status">Loading prices...</p>
   </header>
 
   <main class="layout">
@@ -88,7 +89,7 @@
           </div>
           <div class="votes" id="d-votes"></div>
           <div class="verdict-score" id="d-score"></div>
-          <div class="vote-key">Each circle is one indicator's vote: <strong class="pos">+ Buy</strong>, <strong class="neg">&minus; Sell</strong>, 0 Neutral. A total of +3 or more is a BUY, &minus;3 or less a SELL.</div>
+          <div class="vote-key">Each circle is one indicator's vote: <strong class="pos">+ Buy</strong>, <strong class="neg">&minus; Sell</strong>, 0 Neutral. A total of +6 or more (out of 10) is a BUY, &minus;6 or less a SELL.</div>
         </div>
 
         <div class="valuation" id="d-valuation">
@@ -125,7 +126,7 @@
         </div>
 
         <h2>Indicator breakdown</h2>
-        <p class="hint">Tap an indicator to see what it means, with an example.</p>
+        <p class="hint">Tap an indicator to see its chart, what it means, and an example.</p>
         <div class="indicators" id="d-indicators"></div>
         <p class="footnote" id="d-asof"></p>
       </div>
@@ -141,8 +142,13 @@
       <li><strong>50 vs 200-day moving average:</strong> 50-day above 200-day buy, below sell</li>
       <li><strong>Bollinger Bands (20, 2):</strong> price in the bottom fifth of the bands buy, top fifth sell</li>
       <li><strong>Stochastic (14, 3):</strong> below 20 buy, above 80 sell</li>
+      <li><strong>ADX (14):</strong> only votes when ADX is above 25 (a strong trend): +DI above -DI buy, below sell</li>
+      <li><strong>CCI (20):</strong> below -100 buy, above +100 sell</li>
+      <li><strong>Money Flow Index (14):</strong> below 20 buy, above 80 sell</li>
+      <li><strong>On-Balance Volume:</strong> above its 20-day average buy, below sell</li>
+      <li><strong>Rate of Change (12):</strong> positive buy, negative sell</li>
     </ul>
-    <p>Votes are added up: <strong>+3 or more = BUY</strong>, <strong>-3 or less = SELL</strong>, anything in between = <strong>HOLD</strong>. Trend indicators and overbought/oversold indicators often disagree, so HOLD is the most common result.</p>
+    <p>Votes are added up: <strong>+6 or more = BUY</strong>, <strong>-6 or less = SELL</strong>, anything in between = <strong>HOLD</strong>. Trend indicators and overbought/oversold indicators often disagree, so HOLD is the most common result.</p>
     <p><strong>P/E</strong> is the share price divided by the last 12 months of earnings per share; it's blank for companies with negative earnings. The <strong>sector average</strong> is the plain average P/E of every profitable S&amp;P 500 company in the same sector, so it's the same yardstick whichever index you're browsing. P/E is shown for context only and doesn't affect the verdict.</p>
   </details>
 
