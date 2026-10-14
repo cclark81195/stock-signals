@@ -24,6 +24,7 @@ const state = {
   loadToken: 0,
   chartToken: 0,
   chartCache: new Map(),
+  updatedAt: null,       // unix seconds: when the oldest quotes on screen were fetched from Yahoo
   indCache: new Map(),   // symbol -> /api/indicator-history response
   lastChart: null,
 };
@@ -304,6 +305,8 @@ async function loadIndex(index, selectSymbol = null) {
   state.members = [];
   state.rows = {};
   state.failed = new Set();
+  state.updatedAt = null;
+  renderUpdated();
   state.selected = null;
   state.sector = "";
   document.querySelectorAll(".index-tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.index === index)));
@@ -340,12 +343,14 @@ async function loadQuotes(token, quiet = false) {
   if (!quiet) { showProgress(0); setStatus(`Loading prices and signals for ${symbols.length} stocks...`); }
 
   const queue = [...chunks];
+  const fetchedAt = [];
   async function worker() {
     while (queue.length) {
       const chunk = queue.shift();
       try {
         const data = await getJSON(`/api/quotes?symbols=${chunk.join(",")}`);
         if (token !== state.loadToken) return;
+        if (data.generatedAt) { fetchedAt.push(data.generatedAt); state.updatedAt = Math.min(...fetchedAt); renderUpdated(); }
         Object.assign(state.rows, data.rows);
         for (const s of Object.keys(data.errors || {})) state.failed.add(s);
         for (const s of Object.keys(data.rows || {})) state.failed.delete(s);
@@ -692,6 +697,18 @@ function drawChart(data) {
 }
 
 // ---------------------------------------------------------------- misc UI
+// "Updated Oct 13, 9:12 PM ET (4 min ago)" in the bar at the top of the page.
+function renderUpdated() {
+  const el = $("last-updated");
+  if (!el) return;
+  if (!state.updatedAt) { el.classList.remove("stale"); el.textContent = state.members.length ? "Loading prices..." : ""; return; }
+  const when = new Date(state.updatedAt * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+  const mins = Math.max(0, Math.round((Date.now() / 1000 - state.updatedAt) / 60));
+  const ago = mins < 1 ? "just now" : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.floor(mins / 60)} hr ${mins % 60} min ago` : `${Math.floor(mins / 1440)} d ago`;
+  el.classList.toggle("stale", mins >= 45);   // refresh runs every 15 min, so 45+ means something is wrong
+  el.innerHTML = `Data updated <strong>${esc(when)} ET</strong> (${esc(ago)}) · prices are delayed about 15 minutes`;
+}
+
 function setStatus(text, error = false) {
   const s = $("status");
   s.textContent = text;
@@ -778,6 +795,8 @@ function wire() {
     if (h.index !== state.index) loadIndex(h.index, h.symbol);
     else if (h.symbol && h.symbol !== state.selected && state.info[h.symbol]) selectStock(h.symbol);
   });
+
+  setInterval(renderUpdated, 30 * 1000);   // keeps the "x min ago" text current
 
   // Keep prices fresh while the page stays open.
   setInterval(() => { if (document.visibilityState === "visible" && state.members.length) loadQuotes(state.loadToken, true); }, REFRESH_MS);

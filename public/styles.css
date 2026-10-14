@@ -73,6 +73,9 @@ h1, h2 { margin: 0; }
   backdrop-filter: saturate(1.4) blur(10px);
   border-bottom: 1px solid var(--border);
 }
+.updated { order: 3; flex-basis: 100%; margin: -4px 0 0; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.updated strong { color: var(--text-2); font-weight: 600; }
+.updated.stale strong { color: var(--hold); }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
 .brand .logo { display: block; height: 56px; width: auto; border-radius: 8px; background: #000; }
 .index-tabs { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }

@@ -66,5 +66,7 @@ export default async function handler(req, res) {
       ? "public, s-maxage=60"
       : "public, s-maxage=900, stale-while-revalidate=3600",
   );
-  res.status(failed === symbols.length ? 502 : 200).json({ rows, errors });
+  // generatedAt lets the page show how fresh the data is, even when this
+  // response is served from Vercel's cache.
+  res.status(failed === symbols.length ? 502 : 200).json({ rows, errors, generatedAt: Math.floor(Date.now() / 1000) });
 }
