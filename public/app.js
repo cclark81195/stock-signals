@@ -441,9 +441,9 @@ function renderRows() {
     const failed = !has && state.failed.has(r.symbol);
     const sig = has ? r.signal : failed ? "N/A" : "";
     return `<tr data-symbol="${esc(r.symbol)}" tabindex="0" class="${r.symbol === state.selected ? "selected" : ""}">
+      <td><div class="sym">${esc(r.symbol)}</div><div class="co">${esc(r.company)}</div></td>
       <td class="center">${sig ? `<span class="badge ${signalClass(sig)}">${esc(sig)}</span>` : ""}</td>
       <td class="num score ${cls(r.score)}">${has && r.score != null ? fmtScore(r.score) : ""}</td>
-      <td><div class="sym">${esc(r.symbol)}</div><div class="co">${esc(r.company)}</div></td>
       <td class="num">${has ? money(r.price) : `<span class="pending">${failed ? "n/a" : "..."}</span>`}</td>
       <td class="num ${cls(r.dayPct)}">${has ? pct(r.dayPct) : ""}</td>
       <td class="num ${cls(r.m1Pct)}">${has ? pct(r.m1Pct) : ""}</td>
