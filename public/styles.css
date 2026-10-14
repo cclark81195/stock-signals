@@ -314,3 +314,28 @@ table.stocks { width: 100%; border-collapse: collapse; }
   .chart { height: 230px; }
   .periods button { padding: 5px 9px; }
 }
+
+/* ---- Strategy card ---- */
+.strategy { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+.strategy h2 { margin: 0 0 8px; }
+.strategy h3 { margin: 16px 0 6px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.strategy p { margin: 0 0 8px; line-height: 1.5; }
+.strat-headline { font-size: 1.1rem; font-weight: 700; }
+.stances { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 4px; }
+.stance { background: var(--surface-2); border-radius: 10px; padding: 12px; min-width: 0; }
+.stance p { margin: 6px 0 0; font-size: 0.92rem; }
+.stance-top { display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: space-between; align-items: baseline; }
+.stance-label { font-size: 0.75rem; color: var(--text-2); font-weight: 600; }
+.stance-tag { font-weight: 700; font-size: 0.85rem; }
+.strat-watch { margin: 0; padding-left: 20px; line-height: 1.5; }
+.strat-watch li { margin-bottom: 6px; }
+.strat-earn { margin-top: 10px; }
+.strat-news { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.strat-news li { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.strat-news a { color: var(--text); font-weight: 500; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
+.strat-news a:hover { text-decoration-color: var(--accent); }
+.strat-news small { flex-basis: 100%; color: var(--muted); }
+.tone { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 6px; }
+.tone.caution { color: var(--sell); background: var(--sell-bg); }
+.tone.positive { color: var(--buy); background: var(--buy-bg); }
+@media (max-width: 640px) { .stances { grid-template-columns: 1fr; } }

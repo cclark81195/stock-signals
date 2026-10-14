@@ -84,7 +84,7 @@ P/E is shown for context only; it doesn't change the BUY / SELL / HOLD verdict.
 
 ## Project layout
 - `public/` - the website itself (`index.html`, `styles.css`, `app.js`)
-- `api/` - server functions: `constituents` (index members), `quotes` (prices, P/E + verdicts), `chart` (trend chart data), `indicator-history` (the line behind each indicator's chart), `sector-pe` (sector average P/E)
+- `api/` - server functions: `constituents` (index members), `quotes` (prices, P/E + verdicts), `chart` (trend chart data), `indicator-history` (the line behind each indicator's chart), `strategy` (per-stock plain-English strategy, headlines and next earnings date), `sector-pe` (sector average P/E)
 - `lib/` - shared code: indicator math, Yahoo fetching, index member lists
 
 *Signals are mechanical rules applied to past prices, not predictions, and nothing in this site is financial advice.*
