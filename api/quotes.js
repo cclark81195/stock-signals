@@ -22,6 +22,9 @@ function summarize(bars) {
     return null;
   };
   const ev = evaluate(bars);
+  // Average daily volume over the last ~3 months (63 trading days).
+  const vols = (bars.volume || []).slice(-63).filter((v) => v > 0);
+  const avgVolume = vols.length ? vols.reduce((a, b) => a + b, 0) / vols.length : null;
   return {
     price,
     prevClose: n > 1 ? close[n - 2] : null,
@@ -31,6 +34,7 @@ function summarize(bars) {
     signal: ev ? ev.verdict : "N/A",
     score: ev ? ev.score : null,
     indicators: ev ? ev.indicators : null,
+    avgVolume,
     asOf: lastT,
   };
 }
@@ -55,7 +59,7 @@ export default async function handler(req, res) {
     const s = symbols[i];
     if (!r.ok) { errors[s] = r.error; return; }
     const v = valuations[s] || {};
-    rows[s] = { ...r.value, pe: v.pe ?? null, forwardPE: v.forwardPE ?? null };
+    rows[s] = { ...r.value, pe: v.pe ?? null, forwardPE: v.forwardPE ?? null, marketCap: v.marketCap ?? null };
   });
 
   const failed = Object.keys(errors).length;
