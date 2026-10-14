@@ -1,5 +1,5 @@
 // GET /api/quotes?symbols=AAPL,MSFT,...   (up to 60 symbols)
-// Price, recent performance, P/E and the 5-indicator verdict for each symbol.
+// Price, recent performance, P/E and the 10-indicator verdict for each symbol.
 // Responses are cached at Vercel's edge for 15 minutes, so everyone who opens
 // the site in that window shares one set of Yahoo requests.
 import { fetchChart, fetchValuations, mapLimit } from "../lib/yahoo.js";

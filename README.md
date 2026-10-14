@@ -1,6 +1,6 @@
 # Index Signal Scanner
 
-A website that lets you pick the **Dow 30**, **S&P 500** or **Nasdaq-100**, browse every stock with its price, recent performance and **P/E ratio**, and see a **BUY / SELL / HOLD** verdict based strictly on five technical indicators. Tap any stock for its trend chart (1D, 1W, 1M, 3M, 1Y, 5Y), its P/E next to its sector's average P/E, and a breakdown of how each indicator voted.
+A website that lets you pick the **Dow 30**, **S&P 500** or **Nasdaq-100**, browse every stock with its price, recent performance and **P/E ratio**, and see a **BUY / SELL / HOLD** verdict based strictly on ten technical indicators. Tap any stock for its trend chart (1D, 1W, 1M, 3M, 1Y, 5Y), its P/E next to its sector's average P/E, and a breakdown of how each indicator voted. Tap an indicator to see its own chart for that stock.
 
 It runs on **Vercel** (free) and needs no installs, no API keys and no coding.
 
@@ -38,7 +38,7 @@ That's your shareable link. It works on any phone or computer, and anyone you se
 ## Making changes later
 Edit or re-upload files in your GitHub repository (**Add file > Upload files** replaces files with the same name). Vercel notices the change and republishes the site within a minute or two, at the same link.
 
-**Changing the indicator rules:** all the numbers (RSI 30/70, the +3/-3 thresholds, etc.) are in the `SETTINGS` block at the top of `lib/indicators.js`. On GitHub, open that file, click the pencil icon, edit the numbers, then **Commit changes**.
+**Changing the indicator rules:** all the numbers (RSI 30/70, the +6/-6 thresholds, etc.) are in the `SETTINGS` block at the top of `lib/indicators.js`. On GitHub, open that file, click the pencil icon, edit the numbers, then **Commit changes**.
 
 **Renaming your link:** in Vercel, open the project, go to **Settings > Domains**, and edit the `.vercel.app` name (or connect a domain you own).
 
@@ -55,10 +55,15 @@ Each indicator looks at the latest **daily** data and votes **+1 (buy)**, **-1 (
 | 50-day vs 200-day moving average | 50-day above 200-day (uptrend) | 50-day below 200-day (downtrend) |
 | Bollinger Bands (20, 2 std dev) | price in the bottom 20% of the bands or below | price in the top 20% or above |
 | Stochastic (14, 3) | %K below 20 | %K above 80 |
+| ADX (14) with +DI / -DI | ADX above 25 and +DI above -DI (strong uptrend) | ADX above 25 and -DI above +DI (strong downtrend); below 25 it stays neutral |
+| CCI (20) | below -100 (stretched low) | above +100 (stretched high) |
+| Money Flow Index (14) | below 20 (oversold on heavy selling) | above 80 (overbought on heavy buying) |
+| On-Balance Volume | above its 20-day average (volume flowing in) | below its 20-day average (volume flowing out) |
+| Rate of Change (12) | price higher than 12 sessions ago | price lower than 12 sessions ago |
 
-Tap any indicator on a stock's page for a plain-English explanation with an example.
+Tap any indicator on a stock's page for a chart of that indicator over the last six months (with the buy and sell zones shaded and today marked), a plain-English explanation and an example.
 
-Votes are added up: **+3 or more = BUY**, **-3 or less = SELL**, anything else = **HOLD**. Expect HOLD most of the time: two indicators follow the trend and three look for overbought/oversold conditions, so they often disagree.
+Votes are added up: **+6 or more = BUY**, **-6 or less = SELL**, anything else = **HOLD**. Expect HOLD most of the time: five indicators follow the trend and five look for overbought/oversold conditions, so they often disagree.
 
 ## P/E ratios
 - **P/E (TTM):** share price divided by the last 12 months of earnings per share. It's blank for companies that lost money.
@@ -79,7 +84,7 @@ P/E is shown for context only; it doesn't change the BUY / SELL / HOLD verdict.
 
 ## Project layout
 - `public/` - the website itself (`index.html`, `styles.css`, `app.js`)
-- `api/` - server functions: `constituents` (index members), `quotes` (prices, P/E + verdicts), `chart` (trend chart data), `sector-pe` (sector average P/E)
+- `api/` - server functions: `constituents` (index members), `quotes` (prices, P/E + verdicts), `chart` (trend chart data), `indicator-history` (the line behind each indicator's chart), `sector-pe` (sector average P/E)
 - `lib/` - shared code: indicator math, Yahoo fetching, index member lists
 
 *Signals are mechanical rules applied to past prices, not predictions, and nothing in this site is financial advice.*

@@ -24,6 +24,7 @@ const state = {
   loadToken: 0,
   chartToken: 0,
   chartCache: new Map(),
+  indCache: new Map(),   // symbol -> /api/indicator-history response
   lastChart: null,
 };
 
@@ -60,7 +61,213 @@ const INDICATOR_HELP = {
     example: "Over the last 14 days the stock traded between $40 and $50 and closed at $49, so %K is 90. That's above 80, so it votes Sell. A close of $41 would give %K 10, below 20, and vote Buy.",
   },
 };
-const shortName = (name) => ({ "Moving averages": "MA", "Bollinger Bands": "Bollinger", Stochastic: "Stoch" }[name.split(" (")[0]] || name.split(" (")[0]);
+Object.assign(INDICATOR_HELP, {
+  ADX: {
+    what: "ADX (Average Directional Index) measures how strong a trend is, in either direction, on a scale of about 0 to 100. Above 25 means a real trend is under way. The two DI lines show who is winning: +DI is the pull of buyers and -DI the pull of sellers. ADX only votes when the trend is strong; below 25 it stays neutral.",
+    example: "ADX is 31 and +DI (24) is above -DI (13): a strong uptrend, so ADX votes Buy. If ADX were 18, the trend is too weak to trust and it votes Neutral whatever the DI lines say.",
+  },
+  CCI: {
+    what: "The Commodity Channel Index measures how far today's typical price (the average of the high, low and close) sits from its own 20-day average, scaled so that +100 and -100 mark an unusually big stretch. Above +100 means stretched high; below -100 means stretched low.",
+    example: "CCI reads -140: the price is unusually far below its recent average, so CCI votes Buy. At +120 it would vote Sell, and anywhere between -100 and +100 it stays Neutral.",
+  },
+  MFI: {
+    what: "The Money Flow Index is like RSI but weights each day by how much money traded, so a rise on heavy volume counts for more than one on thin volume. It runs from 0 to 100 over 14 days. Above 80 means money has been pouring in and the stock may be overbought; below 20 means heavy selling and possibly oversold.",
+    example: "MFI is 86 after several high-volume up days, so it votes Sell. At 15 after heavy selling it would vote Buy.",
+  },
+  OBV: {
+    what: "On-Balance Volume keeps a running total: on days the price closes up, that day's trading volume is added; on down days it is subtracted. A rising total suggests buyers are driving the moves. Here the total is compared with its own 20-day average: above it means volume is flowing in, below it means volume is flowing out.",
+    example: "OBV is 48 million and its 20-day average is 45 million. Volume has been tilting toward buyers lately, so OBV votes Buy. If it sat below its average, it would vote Sell.",
+  },
+  ROC: {
+    what: "Rate of Change is the simplest momentum gauge: how much the price has changed compared with 12 trading days ago, as a percentage. Positive means the stock is higher than it was; negative means lower.",
+    example: "A stock at $105 that was $100 twelve trading days ago has an ROC of +5%, so it votes Buy. If it had been $110, ROC would be -4.5% and it would vote Sell.",
+  },
+});
+const SHORT_NAMES = {
+  "Moving averages": "MA", "Bollinger Bands": "Bollinger", Stochastic: "Stoch",
+  "Money Flow Index": "MFI", "On-Balance Volume": "OBV", "Rate of Change": "ROC",
+};
+const shortName = (name) => SHORT_NAMES[name.split(" (")[0]] || name.split(" (")[0];
+const INDICATOR_COUNT = 10;
+
+// ---------------------------------------------------------------- indicator pictures
+// How each indicator is drawn when its card is open. `build` returns lines to plot
+// (and optional coloured zones / guide lines) from /api/indicator-history.
+const C = { price: "var(--series-price)", ma50: "var(--series-ma50)", ma200: "var(--series-ma200)", buy: "var(--buy)", sell: "var(--sell)", muted: "var(--muted)", accent: "var(--accent)" };
+const fmtNum = (v) => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString("en-US") : Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(1));
+const fmtCompact = (v) => {
+  const a = Math.abs(v), s = v < 0 ? "-" : "";
+  return a >= 1e9 ? `${s}${(a / 1e9).toFixed(1)}B` : a >= 1e6 ? `${s}${(a / 1e6).toFixed(0)}M` : a >= 1e3 ? `${s}${(a / 1e3).toFixed(0)}K` : `${s}${a.toFixed(0)}`;
+};
+const IND_VISUAL = {
+  RSI: {
+    title: "RSI over the last 6 months",
+    read: "Above the red band the stock counts as overbought (Sell vote); below the green band it is oversold (Buy vote). Between them RSI stays neutral. The dot marks today.",
+    build: (d) => ({ lines: [{ label: "RSI", v: d.RSI.rsi, color: C.accent, w: 2 }], range: [0, 100], zones: [{ lo: 70, hi: 100, kind: "sell", label: "Overbought" }, { lo: 0, hi: 30, kind: "buy", label: "Oversold" }], ticks: [0, 30, 50, 70, 100] }),
+  },
+  MACD: {
+    title: "MACD vs its signal line",
+    read: "When the MACD line (blue) is above its signal line (orange) momentum is up and MACD votes Buy; below it, Sell. The bars show the gap between the two: green above zero, red below. The dot marks today.",
+    build: (d) => ({ bars: { v: d.MACD.hist }, lines: [{ label: "MACD", v: d.MACD.line, color: C.price, w: 2 }, { label: "Signal", v: d.MACD.signal, color: C.ma50, w: 1.5 }], guides: [{ y: 0 }], fmt: (v) => v.toFixed(1) }),
+  },
+  MA: {
+    title: "Price with 50-day and 200-day averages",
+    read: "When the 50-day line (orange) is above the 200-day line (green) the stock is in an uptrend and votes Buy; below it, a downtrend and Sell. Crossings are the turning points. The dot marks today.",
+    build: (d) => ({ lines: [{ label: "Price", v: d.close, color: C.price, w: 1.5 }, { label: "50-day", v: d.MA.sma50, color: C.ma50, w: 2 }, { label: "200-day", v: d.MA.sma200, color: C.ma200, w: 2 }], money: true }),
+  },
+  Bollinger: {
+    title: "Price inside its Bollinger Bands",
+    read: "The shaded channel is the usual range around the 20-day average. Price in the bottom fifth of the channel is a Buy vote; in the top fifth, a Sell vote. The channel widens when the stock gets jumpy. The dot marks today.",
+    build: (d) => ({ band: { hi: d.Bollinger.upper, lo: d.Bollinger.lower }, lines: [{ label: "Price", v: d.close, color: C.price, w: 2 }, { label: "20-day avg", v: d.Bollinger.mid, color: C.muted, w: 1, dash: "3 3" }], money: true }),
+  },
+  Stoch: {
+    title: "Stochastic over the last 6 months",
+    read: "%K shows where the close sits inside the last 14 days' high-to-low range. Above 80 (red band) is a Sell vote; below 20 (green band) is a Buy vote. %D is a slower copy of %K. The dot marks today.",
+    build: (d) => ({ lines: [{ label: "%K", v: d.Stoch.k, color: C.accent, w: 2 }, { label: "%D", v: d.Stoch.d, color: C.ma50, w: 1.5 }], range: [0, 100], zones: [{ lo: 80, hi: 100, kind: "sell", label: "Overbought" }, { lo: 0, hi: 20, kind: "buy", label: "Oversold" }], ticks: [0, 20, 50, 80, 100] }),
+  },
+  ADX: {
+    title: "Trend strength (ADX) and who is winning",
+    read: "ADX (blue) says how strong the trend is. It only votes when it is above the dashed 25 line. Then the vote follows the leader: +DI (green) above -DI (red) is Buy, the reverse is Sell. The dot marks today.",
+    build: (d) => ({ lines: [{ label: "ADX", v: d.ADX.adx, color: C.accent, w: 2.2 }, { label: "+DI", v: d.ADX.pdi, color: C.buy, w: 1.4 }, { label: "-DI", v: d.ADX.mdi, color: C.sell, w: 1.4 }], guides: [{ y: 25, label: "25 = strong trend" }], range: [0, null] }),
+  },
+  CCI: {
+    title: "CCI over the last 6 months",
+    read: "CCI measures how stretched the price is from its 20-day average. Above +100 (red band) is a Sell vote; below -100 (green band) is a Buy vote. Between them it is neutral. The dot marks today.",
+    build: (d) => ({ lines: [{ label: "CCI", v: d.CCI.cci, color: C.accent, w: 2 }], zones: [{ lo: 100, hi: Infinity, kind: "sell", label: "Stretched high" }, { lo: -Infinity, hi: -100, kind: "buy", label: "Stretched low" }], guides: [{ y: 0 }], ticks: [-100, 0, 100] }),
+  },
+  MFI: {
+    title: "Money Flow Index over the last 6 months",
+    read: "MFI is RSI with trading volume added. Above 80 (red band) means heavy buying and a Sell vote; below 20 (green band) means heavy selling and a Buy vote. The dot marks today.",
+    build: (d) => ({ lines: [{ label: "MFI", v: d.MFI.mfi, color: C.accent, w: 2 }], range: [0, 100], zones: [{ lo: 80, hi: 100, kind: "sell", label: "Overbought" }, { lo: 0, hi: 20, kind: "buy", label: "Oversold" }], ticks: [0, 20, 50, 80, 100] }),
+  },
+  OBV: {
+    title: "On-Balance Volume vs its 20-day average",
+    read: "OBV (blue) rises on up days and falls on down days, by that day's volume. When it is above its 20-day average (orange), volume is flowing in and OBV votes Buy; below it, Sell. The dot marks today.",
+    build: (d) => ({ lines: [{ label: "OBV", v: d.OBV.obv, color: C.price, w: 2 }, { label: "20-day avg", v: d.OBV.avg, color: C.ma50, w: 1.5 }], fmt: fmtCompact }),
+  },
+  ROC: {
+    title: "12-day Rate of Change",
+    read: "The line is the % change in price versus 12 trading days earlier. Above zero (green side) the stock is higher than it was and ROC votes Buy; below zero (red side), Sell. The dot marks today.",
+    build: (d) => ({ lines: [{ label: "ROC %", v: d.ROC.roc, color: C.accent, w: 2 }], zones: [{ lo: 0, hi: Infinity, kind: "buy", label: "Higher than 12 days ago" }, { lo: -Infinity, hi: 0, kind: "sell", label: "Lower" }], guides: [{ y: 0 }], fmt: (v) => `${v.toFixed(0)}%` }),
+  },
+};
+
+function drawIndicatorVisual(el, key, d, sym) {
+  const def = IND_VISUAL[key];
+  if (!def || !d?.t?.length) { el.innerHTML = ""; return; }
+  const spec = def.build(d);
+  const n = d.t.length;
+  const W = Math.max(240, el.clientWidth || 320), H = W < 420 ? 190 : 210;
+  const m = { l: 6, r: 48, t: 10, b: 22 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const fmt = spec.fmt || (spec.money ? (v) => "$" + (v >= 1000 ? Math.round(v).toLocaleString("en-US") : v.toFixed(v < 100 ? 1 : 0)) : fmtNum);
+
+  // y range: fixed when the indicator has natural limits, otherwise fitted to the data
+  const all = [
+    ...spec.lines.flatMap((l) => l.v.filter((x) => x != null)),
+    ...(spec.band ? [...spec.band.hi, ...spec.band.lo].filter((x) => x != null) : []),
+    ...(spec.bars ? spec.bars.v.filter((x) => x != null) : []),
+    ...(spec.guides || []).map((g) => g.y),
+    ...(spec.zones || []).flatMap((z) => [z.lo, z.hi]).filter(Number.isFinite),
+  ];
+  let lo = Math.min(...all), hi = Math.max(...all);
+  if (spec.range) { if (spec.range[0] != null) lo = spec.range[0]; if (spec.range[1] != null) hi = spec.range[1]; }
+  else { const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad; }
+  if (spec.range?.[1] == null && spec.range) hi += (hi - lo) * 0.08;
+  const x = (i) => m.l + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+  const y = (v) => m.t + (1 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * ih;
+
+  const path = (vs) => {
+    let p = "", pen = false;
+    vs.forEach((v, i) => { if (v == null) { pen = false; return; } p += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; });
+    return p;
+  };
+
+  let svg = "";
+  for (const z of spec.zones || []) {
+    const top = y(z.hi), bot = y(z.lo);
+    const colour = z.kind === "buy" ? "var(--buy)" : "var(--sell)";
+    svg += `<rect x="${m.l}" y="${top}" width="${iw}" height="${Math.max(0, bot - top)}" fill="${colour}" opacity="0.11" />`;
+    // label sits inside the zone, at the edge of the chart the zone touches
+    const labelY = z.hi >= hi ? Math.min(top, bot) + 11 : Math.max(top, bot) - 4;
+    svg += `<text class="ind-zone" x="${m.l + 4}" y="${labelY}" fill="${colour}">${esc(z.label)}</text>`;
+  }
+  const ticks = spec.ticks || niceTicks(lo, hi, 4).filter((v) => v >= lo && v <= hi);
+  svg += ticks.map((v) => `<line x1="${m.l}" x2="${m.l + iw}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" /><text x="${W - 4}" y="${y(v) + 4}" text-anchor="end">${esc(fmt(v))}</text>`).join("");
+  for (const g of spec.guides || []) {
+    svg += `<line x1="${m.l}" x2="${m.l + iw}" y1="${y(g.y)}" y2="${y(g.y)}" stroke="var(--muted)" stroke-dasharray="4 4" />`;
+    if (g.label) svg += `<text x="${m.l + 4}" y="${y(g.y) - 4}">${esc(g.label)}</text>`;
+  }
+  if (spec.band) {
+    let up = "", dn = "";
+    spec.band.hi.forEach((v, i) => { if (v != null) up += `${up ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`; });
+    for (let i = n - 1; i >= 0; i--) { const v = spec.band.lo[i]; if (v != null) dn += `L${x(i).toFixed(1)},${y(v).toFixed(1)}`; }
+    svg += `<path d="${up}${dn}Z" fill="var(--series-price)" opacity="0.10" /><path d="${up}" fill="none" stroke="var(--series-price)" stroke-width="1" opacity="0.45" /><path d="M${dn.slice(1)}" fill="none" stroke="var(--series-price)" stroke-width="1" opacity="0.45" />`;
+  }
+  if (spec.bars) {
+    const bw = Math.max(1, iw / n - 0.8), y0 = y(0);
+    spec.bars.v.forEach((v, i) => { if (v == null) return; const yy = y(v); svg += `<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.5, Math.abs(yy - y0)).toFixed(1)}" fill="${v >= 0 ? "var(--buy)" : "var(--sell)"}" opacity="0.45" />`; });
+  }
+  for (const l of spec.lines.slice().reverse()) {
+    svg += `<path d="${path(l.v)}" fill="none" stroke="${l.color}" stroke-width="${l.w}" stroke-linejoin="round" stroke-linecap="round"${l.dash ? ` stroke-dasharray="${l.dash}"` : ""} />`;
+  }
+  const first = spec.lines[0];
+  const lastIdx = (() => { for (let i = n - 1; i >= 0; i--) if (first.v[i] != null) return i; return n - 1; })();
+  svg += `<circle cx="${x(lastIdx)}" cy="${y(first.v[lastIdx])}" r="4" fill="${first.color}" stroke="var(--surface)" stroke-width="2" />`;
+  const nx = W < 420 ? 3 : 5, tz = d.timezone || "America/New_York";
+  const xi = [...new Set(Array.from({ length: nx }, (_, k) => Math.round((k * (n - 1)) / (nx - 1))))];
+  svg += xi.map((i, k) => `<text x="${x(i)}" y="${H - 6}" text-anchor="${k === 0 ? "start" : k === xi.length - 1 ? "end" : "middle"}">${esc(fmtTime(d.t[i], "3M", tz))}</text>`).join("");
+  svg += `<g id="vis-hover" visibility="hidden"><line id="vis-line" y1="${m.t}" y2="${m.t + ih}" stroke="var(--muted)" /></g><rect id="vis-hit" x="${m.l}" y="0" width="${iw}" height="${H}" fill="transparent" />`;
+
+  const legend = spec.lines.map((l) => `<span class="vkey" style="--c:${l.color}">${esc(l.label)}</span>`).join("") +
+    (spec.band ? `<span class="vkey" style="--c:var(--series-price)">Bands</span>` : "");
+  el.innerHTML = `<div class="vis-title">${esc(def.title)}</div>
+    <svg class="vis-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(sym)} ${esc(def.title)}">${svg}</svg>
+    <div class="vis-legend">${legend}</div>
+    <p class="vis-read"><strong>How to read it:</strong> ${esc(def.read)}</p>`;
+
+  const node = el.querySelector("svg"), hover = node.querySelector("#vis-hover"), tip = $("tooltip");
+  const move = (ev) => {
+    const rect = node.getBoundingClientRect();
+    const px = ((ev.clientX - rect.left) / rect.width) * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round(((px - m.l) / iw) * (n - 1))));
+    hover.setAttribute("visibility", "visible");
+    const hl = hover.querySelector("#vis-line"); hl.setAttribute("x1", x(i)); hl.setAttribute("x2", x(i));
+    tip.innerHTML = `<div class="t-date">${esc(fmtTime(d.t[i], "3M", tz, true))}</div>` + spec.lines.map((l) => l.v[i] == null ? "" :
+      `<div class="t-row"><i style="background:${l.color}"></i>${esc(l.label)} <strong>${esc(fmt(l.v[i]))}</strong></div>`).join("");
+    tip.hidden = false;
+    const tw = tip.offsetWidth; let left = ev.clientX + 14;
+    if (left + tw > window.innerWidth - 8) left = ev.clientX - tw - 14;
+    tip.style.left = `${Math.max(8, left)}px`; tip.style.top = `${rect.top + 8}px`;
+  };
+  const leave = () => { hover.setAttribute("visibility", "hidden"); tip.hidden = true; };
+  const hit = node.querySelector("#vis-hit");
+  hit.addEventListener("pointermove", move); hit.addEventListener("pointerdown", move);
+  hit.addEventListener("pointerleave", leave); hit.addEventListener("pointercancel", leave);
+}
+
+// Fetch (once per stock) and draw the picture for whichever indicator card is open.
+async function paintIndicatorVisual() {
+  const sym = state.selected, key = state.openInd;
+  if (!sym || !key || !IND_VISUAL[key]) return;
+  const slot = () => document.querySelector(`#d-indicators .ind.open .ind-visual`);
+  let el = slot();
+  if (!el) return;
+  let data = state.indCache.get(sym);
+  if (!data) {
+    el.innerHTML = `<div class="vis-msg">Loading chart...</div>`;
+    try {
+      data = await getJSON(`/api/indicator-history?symbol=${encodeURIComponent(sym)}`);
+      state.indCache.set(sym, data);
+    } catch {
+      if (state.selected === sym && state.openInd === key && (el = slot())) el.innerHTML = `<div class="vis-msg">Chart unavailable right now.</div>`;
+      return;
+    }
+  }
+  if (state.selected !== sym || state.openInd !== key) return;
+  el = slot();
+  if (el) drawIndicatorVisual(el, key, data, sym);
+}
 
 async function getJSON(url) {
   const r = await fetch(url);
@@ -279,7 +486,7 @@ function renderDetailSummary() {
     $("d-votes").innerHTML = r.indicators.map((i) => `<button type="button" class="vote-dot v${i.vote}" data-ind="${esc(shortName(i.name))}" title="${esc(i.name)}: ${VOTE_LABEL[i.vote]}">
         <i aria-hidden="true">${VOTE_SIGN[i.vote]}</i><b>${VOTE_LABEL[i.vote]}</b><small>${esc(shortName(i.name))}</small>
       </button>`).join("");
-    $("d-score").innerHTML = `<strong>${r.score > 0 ? "+" : r.score < 0 ? "−" : ""}${Math.abs(r.score)} / 5</strong>score`;
+    $("d-score").innerHTML = `<strong>${r.score > 0 ? "+" : r.score < 0 ? "−" : ""}${Math.abs(r.score)} / ${INDICATOR_COUNT}</strong>score`;
     $("d-indicators").innerHTML = r.indicators.map((i) => {
       const label = `${VOTE_SIGN[i.vote]}${i.vote ? "1" : ""} ${VOTE_LABEL[i.vote]}`;
       const key = shortName(i.name);
@@ -291,11 +498,13 @@ function renderDetailSummary() {
         <span class="vote v${i.vote}">${label}</span>
         <div class="ind-rule">${esc(i.rule)}</div>
         ${open && help ? `<div class="ind-help">
+          ${IND_VISUAL[key] ? `<div class="ind-visual" aria-live="polite"></div>` : ""}
           <p>${esc(help.what)}</p>
           <p><strong>Example:</strong> ${esc(help.example)}</p>
         </div>` : ""}
       </div>`;
     }).join("");
+    if (state.openInd) paintIndicatorVisual();
     const d = new Date(r.asOf * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
     $("d-asof").textContent = `Based on daily price data through ${d}.`;
   } else {
@@ -535,10 +744,12 @@ function wire() {
     if (scroll && state.openInd) document.querySelector(`#d-indicators .ind[data-ind="${CSS.escape(key)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
   $("d-indicators").addEventListener("click", (e) => {
+    if (e.target.closest(".ind-visual")) return;   // touching the picture shouldn't close the card
     const card = e.target.closest(".ind[data-ind]");
     if (card) toggleInd(card.dataset.ind);
   });
   $("d-indicators").addEventListener("keydown", (e) => {
+    if (e.target.closest(".ind-visual")) return;
     const card = e.target.closest(".ind[data-ind]");
     if (card && (e.key === "Enter" || e.key === " ")) {
       e.preventDefault();
@@ -555,6 +766,9 @@ function wire() {
   document.querySelectorAll("#periods button").forEach((b) =>
     b.addEventListener("click", () => { state.period = b.dataset.period; loadChart(); }));
   $("show-ma").addEventListener("change", (e) => { state.showMA = e.target.checked; if (state.lastChart) drawChart(state.lastChart); });
+
+  let vt;
+  window.addEventListener("resize", () => { clearTimeout(vt); vt = setTimeout(() => { if (state.openInd && state.selected) paintIndicatorVisual(); }, 120); });
 
   let rt;
   new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(() => state.lastChart && !$("detail-body").hidden && drawChart(state.lastChart), 80); }).observe($("chart"));
