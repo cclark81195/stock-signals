@@ -25,6 +25,7 @@ const state = {
   chartToken: 0,
   chartCache: new Map(),
   updatedAt: null,       // unix seconds: when the oldest quotes on screen were fetched from Yahoo
+  stratCache: new Map(), // symbol -> /api/strategy response
   indCache: new Map(),   // symbol -> /api/indicator-history response
   lastChart: null,
 };
@@ -474,8 +475,63 @@ function selectStock(symbol, { scroll = false } = {}) {
   }
   $("detail").scrollTop = 0;
   renderDetailSummary();
+  loadStrategy(symbol);
   loadChart();
   if (scroll) document.querySelector(`#rows tr[data-symbol="${CSS.escape(symbol)}"]`)?.scrollIntoView({ block: "center" });
+}
+
+// ---------------------------------------------------------------- strategy card
+const TONE_LABEL = { caution: "Caution", positive: "Positive" };
+
+function ago(ts) {
+  const m = Math.max(0, Math.round((Date.now() / 1000 - ts) / 60));
+  if (m < 60) return `${Math.max(1, m)} min ago`;
+  if (m < 60 * 24) return `${Math.round(m / 60)} hr ago`;
+  return `${Math.round(m / 1440)} d ago`;
+}
+
+function renderStrategy(sym, d) {
+  const box = $("d-strategy-body");
+  if (!d) { box.innerHTML = `<p class="footnote">Loading strategy...</p>`; return; }
+  if (d.error) { box.innerHTML = `<p class="footnote">${esc(d.error)}</p>`; return; }
+  const stance = (label, o) => `<div class="stance"><div class="stance-top"><span class="stance-label">${label}</span><span class="stance-tag">${esc(o.stance)}</span></div><p>${esc(o.text)}</p></div>`;
+  let earn = "";
+  if (d.earnings && d.earnings.start > Date.now() / 1000) {
+    const f = (t) => new Date(t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+    earn = `<p class="strat-earn"><strong>Next earnings:</strong> ${f(d.earnings.start)}${d.earnings.end > d.earnings.start + 86400 ? ` to ${f(d.earnings.end)}` : ""} (estimated by Yahoo)</p>`;
+  } else if (!d.eventsAvailable) {
+    earn = `<p class="strat-earn muted">Earnings date unavailable right now.</p>`;
+  }
+  const news = d.news?.length
+    ? `<ul class="strat-news">${d.news.map((n) => `<li>${n.tone ? `<span class="tone ${n.tone}">${TONE_LABEL[n.tone]}</span>` : ""}<a href="${esc(n.link)}" target="_blank" rel="noopener noreferrer">${esc(n.title)}</a><small>${esc([n.publisher, n.time ? ago(n.time) : ""].filter(Boolean).join(" · "))}</small></li>`).join("")}</ul>
+       <p class="footnote">Tags are a simple keyword check of the headline, not a reading of the article. Headlines come from Yahoo Finance.</p>`
+    : `<p class="footnote">${d.newsAvailable ? "No recent headlines found." : "Headlines are unavailable right now."}</p>`;
+  box.innerHTML = `
+    <p class="strat-headline">${esc(d.headline)}</p>
+    <div class="stances">${stance("Short term (days to weeks)", d.short)}${stance("Long term (months and beyond)", d.long)}</div>
+    <h3>Why this verdict</h3>
+    ${d.why.map((t) => `<p>${esc(t)}</p>`).join("")}
+    ${d.watch.length ? `<h3>Things to watch</h3><ul class="strat-watch">${d.watch.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+    ${earn}
+    <h3>Recent headlines</h3>
+    ${news}
+    <p class="footnote">Rule-based summary of the indicators above, not a prediction or financial advice. Indicators only see price and volume, so always check the news before acting.</p>`;
+}
+
+async function loadStrategy(sym) {
+  const card = $("d-strategy");
+  if (!state.rows[sym]?.indicators) { card.hidden = true; return; }
+  card.hidden = false;
+  const cached = state.stratCache.get(sym);
+  renderStrategy(sym, cached || null);
+  if (cached) return;
+  try {
+    const d = await getJSON(`/api/strategy?symbol=${encodeURIComponent(sym)}`);
+    state.stratCache.set(sym, d);
+    if (state.selected === sym) renderStrategy(sym, d);
+  } catch (e) {
+    if (state.selected === sym) renderStrategy(sym, { error: "Couldn't load the strategy right now. Try again in a minute." });
+  }
 }
 
 function closeDetail(updateHash = true) {
