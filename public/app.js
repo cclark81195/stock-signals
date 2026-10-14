@@ -405,6 +405,10 @@ function currentList() {
   return list;
 }
 
+function fmtScore(n) {
+  return `${n > 0 ? "+" : n < 0 ? "\u2212" : ""}${Math.abs(n)}`;
+}
+
 function renderRows() {
   const all = Object.values(state.rows);
   const count = (s) => all.filter((r) => r.signal === s).length;
@@ -420,7 +424,7 @@ function renderRows() {
   const list = currentList();
   if (!state.members.length) { $("rows").innerHTML = ""; return; }
   if (!list.length) {
-    $("rows").innerHTML = `<tr><td colspan="8" class="pending" style="text-align:center;padding:24px">No stocks match these filters.</td></tr>`;
+    $("rows").innerHTML = `<tr><td colspan="9" class="pending" style="text-align:center;padding:24px">No stocks match these filters.</td></tr>`;
     return;
   }
   $("rows").innerHTML = list.map((r) => {
@@ -436,6 +440,7 @@ function renderRows() {
       <td class="num">${has ? ratio(r.pe) : ""}</td>
       <td class="num sector-pe">${state.sectorPE ? ratio(r.sectorPE) : ""}</td>
       <td class="center">${sig ? `<span class="badge ${signalClass(sig)}">${esc(sig)}</span>` : ""}</td>
+      <td class="num score ${cls(r.score)}">${has && r.score != null ? fmtScore(r.score) : ""}</td>
     </tr>`;
   }).join("");
 }
