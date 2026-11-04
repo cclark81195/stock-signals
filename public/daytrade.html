@@ -82,6 +82,32 @@
           <label class="check"><input type="checkbox" id="f-vwap" checked aria-describedby="h-vwap" /> VWAP reclaim</label>
           <span class="help dt-ex" id="h-vwap">Buys when price climbs back above VWAP (the day's volume-weighted average price) after spending most of the last half hour below it. The stop sits just under the recent lows.</span>
         </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-flag" aria-describedby="h-flag" /> Bull flag <span class="dt-new">new</span></label>
+          <span class="help dt-ex" id="h-flag">Looks for a sharp rise, then a short, shallow, quieter pullback (3 to 8 bars that give back at most half the rise). Buys the first close above the pullback's high on a pickup in volume. The stop sits under the pullback's low.</span>
+        </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-tri" aria-describedby="h-tri" /> Ascending triangle <span class="dt-new">new</span></label>
+          <span class="help dt-ex" id="h-tri">Looks for a flat ceiling touched at least twice in the last 2 hours while the lows keep rising. Buys the first close above the ceiling on strong volume. The stop sits under the most recent low.</span>
+        </div>
+      </div>
+      <div class="dt-setups cols3" role="group" aria-label="Filters and exit">
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-mkt" aria-describedby="h-mkt" /> Only when the market is up</label>
+          <span class="help dt-ex" id="h-mkt">Skips a stock trade unless SPY is above its own VWAP at that moment, so you only buy when the whole market is leaning your way. Stocks only; crypto ignores it.</span>
+        </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-inplay" aria-describedby="h-inplay" /> Only stocks "in play"</label>
+          <span class="help dt-ex" id="h-inplay">Skips a trade unless the stock's volume in the first 30 minutes is at least 1.2 times its recent average. Unusual volume means something is happening, and breakouts work better then.</span>
+        </div>
+        <div class="dt-setup">
+          <label class="check" for="f-exit">Profit target</label>
+          <select id="f-exit" aria-describedby="h-exit">
+            <option value="fixed">Fixed (the R multiple above)</option>
+            <option value="measured">Measured move (flag and triangle)</option>
+          </select>
+          <span class="help dt-ex" id="h-exit">Fixed uses your profit target for every setup. Measured move aims for the height of the pattern (the rise before the flag, or the triangle's height), kept between 1R and 4R. Opening-range and VWAP trades always use the fixed target.</span>
+        </div>
       </div>
       <button type="submit" id="f-run" class="dt-run">Run backtest</button>
       <p class="help dt-ex dt-run-help">Runs the rules over about 60 days of 5-minute prices with the settings above. It takes a few seconds. Your settings are remembered on this device.</p>

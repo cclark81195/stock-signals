@@ -3,7 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { makeConfig } from "../lib/daytrade/config.js";
-import { toSessions, noiseBefore } from "../lib/daytrade/sessions.js";
+import { toSessions, noiseBefore, relVolAt } from "../lib/daytrade/sessions.js";
 import { buildPlan, RiskGuard, checkOrder } from "../lib/daytrade/risk.js";
 import { backtestSymbol, runSession, scanLatest, summarize } from "../lib/daytrade/backtest.js";
 import { decide, execute } from "../lib/daytrade/executor.js";
@@ -285,4 +285,108 @@ test("noiseBefore needs prior sessions", () => {
   assert.equal(noiseBefore(sessions, 0), null);
   assert.ok(noiseBefore(sessions, 1) > 0);
   void runSession; // exported for the scanner
+});
+
+
+// ---------------------------------------------------------------- pattern setups, filters, measured exit
+// Bull flag: bars 3-8 rise 99.9 -> 103.0 (the pole), bars 9-11 pull back to 102.3 on light volume
+// (the flag), bar 12 closes at 103.3 above the flag high 103.0 on 3000 volume. Entry fills at 103.3
+// (bar 13 open); the stop is 102.25, so risk is 1.05 and the pole height 3.1 is about 2.95R.
+function flagDay(dayIndex, over = {}) {
+  const script = {};
+  const closes = [100.4, 100.9, 101.4, 101.9, 102.4, 102.9];
+  closes.forEach((c, k) => { script[3 + k] = { o: k ? closes[k - 1] : 100, c, v: 2000 }; });
+  script[9] = { o: 102.9, c: 102.6, v: 500 };
+  script[10] = { o: 102.6, c: 102.4, v: 500 };
+  script[11] = { o: 102.4, c: 102.5, v: 500 };
+  script[12] = { o: 102.5, c: 103.3, h: 103.4, l: 102.5, v: 3000 };
+  script[13] = { o: 103.3, c: 103.3, h: 103.35, l: 103.2 };
+  script[14] = { o: 103.3, c: 105.5, h: 105.6, l: 103.3 };   // reaches 2R (105.4) but not the measured move
+  return makeDay(dayIndex, 100, { ...script, ...over });
+}
+const patCfg = (extra = {}) => makeConfig({
+  equity: 10000, riskPct: 1, slippageBps: 0, maxRiskPct: 2,
+  setups: { orb: { enabled: false }, vwap: { enabled: false }, flag: { enabled: true }, triangle: { enabled: true } },
+  ...extra,
+});
+const run2 = (day, c, mk = null) => backtestSymbol("T", toSessions(concat(makeDay(0, 100), day)), c, mk).trades;
+
+test("bull flag: buys the breakout above the pullback, stop under the flag", () => {
+  const [t] = run2(flagDay(1), patCfg());
+  assert.equal(t.setup, "flag");
+  assert.ok(Math.abs(t.entry - 103.3) < 0.01, `entry ${t.entry}`);
+  assert.ok(Math.abs(t.stop - 102.25) < 0.01, `stop ${t.stop}`);
+  assert.equal(t.exitReason, "target");
+  assert.ok(Math.abs(t.target - (103.3 + 2 * 1.05)) < 0.02, `target ${t.target}`);
+});
+
+test("bull flag: measured exit aims for the pole height instead of 2R", () => {
+  const [t] = run2(flagDay(1), patCfg({ exit: "measured" }));
+  assert.ok(Math.abs(t.target - (103.3 + 3.1)) < 0.05, `target ${t.target}`);
+  assert.notEqual(t.exitReason, "target"); // bar 14 only reaches 105.6
+});
+
+test("bull flag: a deep pullback (more than half the pole) is not a flag", () => {
+  const day = flagDay(1, { 10: { o: 102.6, c: 101.0, v: 500 } });
+  assert.equal(run2(day, patCfg()).length, 0);
+});
+
+test("bull flag: a flag on heavier volume than the pole is rejected", () => {
+  const day = flagDay(1, { 9: { o: 102.9, c: 102.6, v: 9000 }, 10: { o: 102.6, c: 102.4, v: 9000 }, 11: { o: 102.4, c: 102.5, v: 9000 } });
+  assert.equal(run2(day, patCfg()).length, 0);
+});
+
+// Ascending triangle: ceiling 101.0 touched at bars 4 and 19, lows rising 99.5 -> 100.0 -> 100.3,
+// breakout close at 101.3 on bar 24.
+function triDay(dayIndex, over = {}) {
+  const script = {};
+  for (let k = 0; k < 24; k++) script[k] = { o: 100.5, c: 100.5 };
+  script[2] = { o: 100.5, c: 100.5, l: 99.5 };
+  script[4] = { o: 100.5, c: 100.5, h: 101.0 };
+  script[10] = { o: 100.5, c: 100.5, l: 100.0 };
+  script[18] = { o: 100.5, c: 100.5, l: 100.3 };
+  script[19] = { o: 100.5, c: 100.5, h: 101.0 };
+  script[24] = { o: 100.5, c: 101.3, h: 101.4, l: 100.5, v: 3000 };
+  script[25] = { o: 101.3, c: 101.3, h: 101.35, l: 101.2 };
+  script[26] = { o: 101.3, c: 102.9, h: 103.0, l: 101.3 };   // above the measured target (102.8), below 2R (103.4)
+  return makeDay(dayIndex, 100, { ...script, ...over });
+}
+
+test("ascending triangle: buys the breakout above the ceiling", () => {
+  const [t] = run2(triDay(1), patCfg());
+  assert.equal(t.setup, "triangle");
+  assert.ok(Math.abs(t.entry - 101.3) < 0.01);
+  assert.ok(Math.abs(t.stop - 100.25) < 0.01, `stop ${t.stop}`);
+  assert.notEqual(t.exitReason, "target"); // 2R target is 103.4
+  const [m] = run2(triDay(1), patCfg({ exit: "measured" }));
+  assert.equal(m.exitReason, "target");    // measured target 102.8 is reached
+});
+
+test("ascending triangle: falling lows are not a triangle", () => {
+  const day = triDay(1, { 10: { o: 100.5, c: 100.5, l: 99.0 }, 18: { o: 100.5, c: 100.5, l: 99.2 } });
+  assert.equal(run2(day, patCfg()).length, 0);
+});
+
+test("new setups are off unless switched on", () => {
+  const c = makeConfig({ equity: 10000, riskPct: 1, slippageBps: 0, maxRiskPct: 2, setups: { orb: { enabled: false }, vwap: { enabled: false } } });
+  assert.equal(run2(flagDay(1), c).length, 0);
+  assert.equal(run2(triDay(1), c).length, 0);
+});
+
+test("market filter: no trade while SPY is below VWAP, trade when above", () => {
+  const f = patCfg({ filters: { market: true } });
+  assert.equal(run2(flagDay(1), f, () => false).length, 0);
+  assert.equal(run2(flagDay(1), f, () => true).length, 1);
+});
+
+test("relative volume only uses bars up to the current one", () => {
+  const sessions = toSessions(concat(makeDay(0, 100), makeDay(1, 100, { 3: { v: 3000 }, 4: { v: 3000 }, 5: { v: 3000 } })));
+  assert.equal(relVolAt(sessions, 1, 1), null);                    // too early to know
+  assert.ok(Math.abs(relVolAt(sessions, 1, 2) - 1) < 1e-9);        // bars 0-2 are normal
+  assert.ok(Math.abs(relVolAt(sessions, 1, 5) - 2) < 1e-9);        // (3x1000 + 3x3000) / 6000
+});
+
+test("in-play filter blocks a setup when early volume is ordinary", () => {
+  assert.equal(run2(flagDay(1), patCfg({ filters: { inPlay: true, minRelVol: 1.2 } })).length, 1); // 1.5x
+  assert.equal(run2(flagDay(1), patCfg({ filters: { inPlay: true, minRelVol: 2 } })).length, 0);
 });
