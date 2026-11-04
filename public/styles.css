@@ -78,8 +78,36 @@ h1, h2 { margin: 0; }
 .updated.stale strong { color: var(--hold); }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
 .brand .logo { display: block; height: 56px; width: auto; border-radius: 8px; background: #000; }
-.dt-link { color: var(--accent); font-weight: 600; text-decoration: none; padding: 6px 4px; }
-.dt-link:hover { text-decoration: underline; }
+/* ---- Site menu (shared; built by nav.js) ---- */
+.topbar-left { display: flex; align-items: center; gap: 10px; }
+.menu-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 12px;
+}
+.menu-btn:hover { background: var(--surface-2); }
+.menu-btn:focus-visible, .menu-close:focus-visible, .menu-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.menu-overlay {
+  position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.45);
+  opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+}
+.menu-panel {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: 50; width: min(320px, 86vw); overflow-y: auto;
+  background: var(--surface); border-right: 1px solid var(--border); box-shadow: var(--shadow);
+  padding: max(16px, env(safe-area-inset-top)) 16px 16px max(16px, env(safe-area-inset-left));
+  transform: translateX(-102%); visibility: hidden; transition: transform 0.22s ease, visibility 0s linear 0.22s;
+}
+body.menu-open { overflow: hidden; }
+body.menu-open .menu-overlay { opacity: 1; pointer-events: auto; }
+body.menu-open .menu-panel { transform: none; visibility: visible; transition: transform 0.22s ease; }
+.menu-head { display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 1.05rem; margin-bottom: 12px; }
+.menu-close { width: 40px; height: 40px; font-size: 1.6rem; line-height: 1; background: none; border: 0; color: var(--text-2); border-radius: 10px; }
+.menu-close:hover { background: var(--surface-2); }
+.menu-panel nav { display: flex; flex-direction: column; gap: 8px; }
+.menu-link { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); text-decoration: none; }
+.menu-link span { font-size: 0.82rem; color: var(--muted); }
+.menu-link:hover { background: var(--surface-2); }
+.menu-link.current { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+@media (prefers-reduced-motion: reduce) { .menu-overlay, .menu-panel { transition: none; } }
 .index-tabs { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
 .index-tabs button {
   border: 0; background: transparent; padding: 6px 14px; border-radius: 8px; font-weight: 600; color: var(--text-2);

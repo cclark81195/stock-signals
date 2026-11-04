@@ -18,8 +18,6 @@
       <img class="logo" src="logo.png" width="76" height="56" alt="FFS Global" />
       <span>Day Trade Lab</span>
     </div>
-    <a class="dt-link" href="/">&larr; Index scanner</a>
-    <a class="dt-link" href="swing.html">Swing Lab</a>
     <p class="updated" id="dt-updated" role="status">Not run yet</p>
   </header>
 
@@ -67,7 +65,7 @@
         <div class="dt-picker" id="picker">
           <div class="dt-chips" id="chips"></div>
           <input id="f-search" type="text" role="combobox" aria-expanded="false" aria-controls="f-list" aria-autocomplete="list"
-            placeholder="Search S&amp;P 500 stocks, SPY or crypto..." autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="h-symbols" />
+            placeholder="Leave blank to test the whole S&amp;P 500, or search stocks, SPY, crypto..." autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="h-symbols" />
           <ul class="dt-list" id="f-list" role="listbox" aria-label="Matching symbols" hidden></ul>
         </div>
         <div class="dt-quick">
@@ -76,7 +74,7 @@
           <span class="help" id="f-loaded"></span>
           <span class="help dt-note" id="f-note" role="status"></span>
         </div>
-        <span class="help dt-ex" id="h-symbols">Pick up to 10. Every S&amp;P 500 stock is available, plus SPY (the S&amp;P 500 index fund) and the five biggest cryptocurrencies other than stablecoins: Bitcoin, Ethereum, BNB, XRP and Solana. Very heavily traded names work best, because tight bid-ask spreads are what keep small edges alive.</span>
+        <span class="help dt-ex" id="h-symbols"><strong>Leave this empty to test every S&amp;P 500 stock</strong> (the Run button then scans all of them and ranks the results; it takes a few minutes, and crypto and SPY are not included). Or pick up to 10 symbols for a quick test that also shows today's setups and every trade. Every S&amp;P 500 stock is available, plus SPY (the S&amp;P 500 index fund) and the five biggest cryptocurrencies other than stablecoins: Bitcoin, Ethereum, BNB, XRP and Solana. Very heavily traded names work best, because tight bid-ask spreads are what keep small edges alive.</span>
       </div>
       <div class="dt-setups" role="group" aria-label="Setups">
         <div class="dt-setup">
@@ -138,8 +136,8 @@
           <span class="help dt-ex" id="h-partial">When a trade reaches a profit equal to the amount risked (+1R), sells half and moves the stop on the rest to the buy price. This wins more often and gives up some of the big winners. With whole shares, a one-share trade cannot be split.</span>
         </div>
       </div>
-      <button type="submit" id="f-run" class="dt-run">Run backtest</button>
-      <p class="help dt-ex dt-run-help">Runs the rules over about 60 days of 5-minute prices with the settings above. It takes a few seconds. Your settings are remembered on this device.</p>
+      <button type="submit" id="f-run" class="dt-run">Run on the whole S&amp;P 500</button>
+      <p class="help dt-ex dt-run-help">Runs the rules over about 60 days of 5-minute prices with the settings above. With symbols picked it takes a few seconds; with the box empty it scans the whole S&amp;P 500 and takes a few minutes. Your settings are remembered on this device.</p>
     </form>
 
     <p class="status" id="dt-status" role="status"></p>
@@ -307,12 +305,11 @@
       </section>
     </div>
 
-    <section class="dt-scansec" id="dt-sp" aria-label="S&amp;P 500 scan">
+    <section class="dt-scansec" id="dt-sp" aria-label="S&amp;P 500 scan" hidden>
       <h2>S&amp;P 500 scan</h2>
-      <p class="hint">Runs the settings above on <strong>every S&amp;P 500 stock</strong>, ten at a time, and ranks how each one did. The symbols you picked at the top are not used here. It takes a few minutes.</p>
+      <p class="hint">Runs the settings above on <strong>every S&amp;P 500 stock</strong>, twenty-five at a time, and ranks how each one did. This is what the Run button does when the Symbols box is empty.</p>
       <p class="hint dt-ex">Read it as a test of the strategy, not a shopping list: with 500 stocks and only about 60 days of prices, the top of the list is mostly luck. Look at the whole-index and sector rows, and at whether the older and newer halves of the 60 days agree.</p>
       <div class="dt-sp-actions">
-        <button type="button" id="sp-run" class="dt-run dt-sp-run" disabled>Scan the S&amp;P 500</button>
         <button type="button" id="sp-cancel" class="dt-mini" hidden>Stop</button>
         <button type="button" id="sp-retry" class="dt-mini" hidden>Retry failed</button>
         <button type="button" id="sp-csv" class="dt-mini" hidden>Download CSV</button>
@@ -467,5 +464,6 @@
     Prices from Yahoo Finance, usually delayed about 15 minutes. Backtests are simulations on past prices, not predictions, and nothing here is financial advice.
   </footer>
   <script type="module" src="daytrade.js"></script>
+  <script src="nav.js" defer></script>
 </body>
 </html>

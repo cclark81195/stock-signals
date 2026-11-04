@@ -26,7 +26,7 @@ function loadSettings() {
     if (saved.exit === "fixed" || saved.exit === "measured") $("f-exit").value = saved.exit;
   }
   const fromSaved = typeof saved?.symbols === "string" ? parseSymbols(saved.symbols) : [];
-  setSelected(fromSaved.length ? fromSaved : DEFAULT_SYMBOLS);
+  setSelected(fromSaved);
 }
 function saveSettings(s) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch { /* ignore */ }
@@ -211,11 +211,9 @@ let runToken = 0;
 async function run() {
   const s = readForm();
   saveSettings(s);
-  if (!picker.selected.length) {
-    $("dt-status").className = "status error";
-    $("dt-status").textContent = "Pick at least one symbol to test.";
-    return;
-  }
+  if (!picker.selected.length) { spRun(); return; }   // empty box: the whole S&P 500
+  if (sp.running) { $("dt-status").className = "status"; $("dt-status").textContent = "The S&P 500 scan is still running. Stop it first, or wait for it to finish."; return; }
+  $("dt-sp").hidden = true;
   const token = ++runToken;
   const qs = settingsParams(s);
   qs.set("symbols", s.symbols);
@@ -242,7 +240,6 @@ async function run() {
 // ---------------------------------------------------------------- symbol picker
 // A searchable multi-select: type to filter, arrow keys + Enter (or tap) to add, x to remove.
 const MAX_SYMBOLS = 10;                       // the API tests at most 10 symbols per run
-const DEFAULT_SYMBOLS = ["SPY", "AAPL", "MSFT", "NVDA", "TSLA"];
 // Only used if /api/daytrade-symbols can't be reached; the server's list (lib/daytrade/markets.js) is the source of truth.
 const FALLBACK_OPTIONS = [
   { symbol: "SPY", name: "SPDR S&P 500 ETF Trust", tag: "ETF" },
@@ -272,6 +269,14 @@ function renderChips() {
   const count = $("f-count");
   count.textContent = `(${n} of ${MAX_SYMBOLS})`;
   count.classList.toggle("full", n >= MAX_SYMBOLS);
+  updateRunLabel();
+}
+
+// Blank Symbols box = scan the whole S&P 500; otherwise a quick test of the picked symbols.
+function updateRunLabel() {
+  const b = $("f-run");
+  if (!b) return;
+  b.textContent = picker.selected.length ? "Run backtest" : "Run on the whole S&P 500";
 }
 
 function setSelected(list) {
@@ -633,8 +638,7 @@ function spStocks() {
 function spOptionsLoaded() {
   sp.stocks = spStocks();
   const ok = sp.stocks.length >= 100;
-  $("sp-run").disabled = !ok || sp.running;
-  if (!ok && !sp.rows.size) $("sp-status").textContent = "The S&P 500 list could not be loaded, so the scan is unavailable right now. Reload the page to try again.";
+  if (!ok && !picker.selected.length) { $("dt-status").className = "status error"; $("dt-status").textContent = "The S&P 500 list could not be loaded, so the whole-index scan is unavailable right now. Type some tickers or reload the page."; }
 }
 
 const spSum = (list, key = "all") => {
@@ -823,14 +827,23 @@ function spSettingsNote(s) {
 }
 
 async function spRun(only = null) {
-  if (sp.running || !sp.stocks.length) return;
+  if (sp.running) return;
+  if (!sp.stocks.length) {
+    $("dt-status").className = "status error";
+    $("dt-status").textContent = "The S&P 500 list could not be loaded, so the whole-index scan is unavailable. Pick some symbols instead, or reload the page.";
+    return;
+  }
   const s = readForm();
   saveSettings(s);
   if (!s.orb && !s.vwap && !s.flag && !s.tri && !s.pb && !s.fib && !s.dbot && !s.gap) {
-    $("sp-status").className = "status error";
-    $("sp-status").textContent = "Switch on at least one setup above first.";
+    $("dt-status").className = "status error";
+    $("dt-status").textContent = "Switch on at least one setup above first.";
     return;
   }
+  runToken++;                       // drop any single-run answer still in flight
+  $("dt-results").hidden = true; $("dt-status").textContent = "";
+  $("dt-sp").hidden = false;
+  $("dt-sp").scrollIntoView({ behavior: "smooth", block: "start" });
   const symbols = only || sp.stocks.map((x) => x.symbol);
   if (!only) sp.rows.clear();
   sp.failed = [];
@@ -839,7 +852,7 @@ async function spRun(only = null) {
   sp.equity = Number(s.equity) || 10000;
   sp.slip = Number(s.slipBps) || 0;
   $("sp-used").textContent = sp.used;
-  $("sp-run").disabled = true; $("sp-cancel").hidden = false; $("sp-retry").hidden = true;
+  $("f-run").disabled = true; $("sp-cancel").hidden = false; $("sp-retry").hidden = true;
   $("sp-progress").hidden = false;
   $("sp-status").className = "status";
   $("sp-status").textContent = (only ? "Retrying the stocks that failed..." : "Scanning the S&P 500. You can keep this page open while it runs...") + " The charts appear when it finishes.";
@@ -876,7 +889,7 @@ async function spRun(only = null) {
 
   const stopped = sp.cancel;
   sp.running = false;
-  $("sp-cancel").hidden = true; $("sp-run").disabled = false; $("sp-progress").hidden = true;
+  $("sp-cancel").hidden = true; $("f-run").disabled = false; $("sp-progress").hidden = true;
   if (stopped) sp.failed.push(...queue.flat()); // never started: offer them in "Retry failed"
   spRender();
   spRenderCharts();
@@ -902,7 +915,6 @@ function spCsv() {
 }
 
 function spInit() {
-  $("sp-run").addEventListener("click", () => spRun());
   $("sp-cancel").addEventListener("click", () => { sp.cancel = true; $("sp-status").textContent = "Stopping after the batches already running..."; });
   $("sp-retry").addEventListener("click", () => spRun([...new Set(sp.failed)]));
   $("sp-csv").addEventListener("click", spCsv);
@@ -933,7 +945,8 @@ $("dt-form").addEventListener("submit", (e) => { e.preventDefault(); run(); });
 wirePicker();
 loadSettings();
 loadOptions();
-run();
+if (picker.selected.length) run();
+else { $("dt-status").className = "status"; $("dt-status").textContent = "Ready. With the Symbols box empty, Run tests the whole S&P 500 (a few minutes); pick up to 10 symbols for a quick test."; }
 
 // Show/hide every explanation (setting help, tile and chart notes, column guides). Collapsed by default.
 (function wireExplain() {
