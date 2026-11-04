@@ -80,7 +80,7 @@ export default async function handler(req, res) {
         const splitDate = tested.length ? tested[Math.floor(tested.length / 2)].date : null;
         return {
           symbol, assetClass: profile === PROFILES.crypto ? "crypto" : "stocks", sessions: sessionsTested, splitDate,
-          all: compactStats(trades),
+          all: compactStats(trades, true),
           first: compactStats(trades.filter((t) => t.date < splitDate)),
           second: compactStats(trades.filter((t) => t.date >= splitDate)),
           // just what the charts need (no reason text, stop, target...)

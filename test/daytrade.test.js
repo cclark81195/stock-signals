@@ -599,3 +599,15 @@ test("crypto ignores the midday lull and the gap setup", () => {
   assert.equal(c.avoidMidday, false);
   assert.equal(c.setups.gap.enabled, false);
 });
+
+test("compactStats detail splits the same trades by setup and by exit, and adds up", () => {
+  const trades = [...run2(flagDay(1), patCfg({ partial: { enabled: true } })), ...run2(triDay(1), patCfg())];
+  const c = compactStats(trades, true);
+  assert.equal(c.trades, 2);
+  assert.equal(Object.values(c.bySetup).reduce((t, g) => t + g.trades, 0), 2);
+  assert.equal(Object.values(c.byExit).reduce((t, e) => t + e.trades, 0), 2);
+  assert.ok(Math.abs(Object.values(c.bySetup).reduce((t, g) => t + g.sumNetR, 0) - c.sumNetR) < 0.01);
+  assert.equal(c.partials, 1);
+  assert.ok(c.stopPctSum > 0 && c.holdBarsSum > 0);
+  assert.equal(compactStats(trades).byExit, undefined); // the light version stays light
+});
