@@ -1,5 +1,5 @@
 // GET /api/daytrade?symbols=SPY,AAPL,BTC-USD&equity=10000&riskPct=0.5&targetR=2&slipBps=2&cryptoSlipBps=10&orb=1&vwap=1
-//   &dollars=50 (fixed dollars per buy; omit for risk-based sizing)  &scan=1 (compact per-symbol totals for the S&P 500 scan)  &flag=1&tri=1 (pattern setups)  &exit=measured  &mkt=1 (SPY above VWAP)  &inplay=1 (unusual early volume)
+//   &dollars=50 (fixed dollars per buy; omit for risk-based sizing)  &scan=1 (compact per-symbol totals for the S&P 500 scan)  &flag=1&tri=1&pb=1&fib=1&dbot=1&gap=1 (more setups)  &midday=1 (skip the 11:30-14:00 ET lull)  &partial=1 (sell half at +1R)  &exit=measured  &mkt=1 (SPY above VWAP)  &inplay=1 (unusual early volume)
 // Day Trade Lab: latest-session setups plus a cost-aware backtest of the last ~60 days of
 // 5-minute bars (the most Yahoo provides). Stocks use the 9:30-16:00 ET session; crypto uses
 // UTC days. Research only; it places no orders. Cached at Vercel's edge for 5 minutes.
@@ -36,7 +36,14 @@ export default async function handler(req, res) {
     slippageBps: clamp(q.slipBps, 0, 30),
     exit: q.exit === "measured" ? "measured" : q.exit === "fixed" ? "fixed" : undefined,
     filters: strip({ market: flag(q.mkt), inPlay: flag(q.inplay) }),
-    setups: { orb: strip(orb), vwap: strip(vwap), flag: strip({ enabled: flag(q.flag) }), triangle: strip({ enabled: flag(q.tri) }) },
+    avoidMidday: flag(q.midday),
+    partial: strip({ enabled: flag(q.partial) }),
+    setups: {
+      orb: strip(orb), vwap: strip(vwap),
+      flag: strip({ enabled: flag(q.flag) }), triangle: strip({ enabled: flag(q.tri) }),
+      gap: strip({ enabled: flag(q.gap) }), pullback: strip({ enabled: flag(q.pb) }),
+      fib: strip({ enabled: flag(q.fib) }), dbottom: strip({ enabled: flag(q.dbot) }),
+    },
   });
   const cryptoSlip = clamp(q.cryptoSlipBps, 0, 100) ?? 10;
 
@@ -79,7 +86,7 @@ export default async function handler(req, res) {
           // just what the charts need (no reason text, stop, target...)
           trades: trades.map((t) => ({
             symbol: t.symbol, date: t.date, setup: t.setup, entryTime: t.entryTime, exitTime: t.exitTime,
-            entry: t.entry, exit: t.exit, shares: t.shares, exitReason: t.exitReason, netR: t.netR, pnl: t.pnl,
+            entry: t.entry, exit: t.exit, shares: t.shares, exitReason: t.exitReason, netR: t.netR, pnl: t.pnl, partial: t.partial,
           })),
         };
       }
@@ -126,7 +133,7 @@ export default async function handler(req, res) {
       warnings,
       config: {
         equity: base.equity, riskPct: base.riskPct, dollarsPerTrade: base.dollarsPerTrade, targetR: base.targetR,
-        slippageBps: base.slippageBps, cryptoSlippageBps: cryptoSlip, exit: base.exit, filters: base.filters,
+        slippageBps: base.slippageBps, cryptoSlippageBps: cryptoSlip, exit: base.exit, filters: base.filters, avoidMidday: base.avoidMidday, partial: base.partial,
         maxTradesPerDay: base.maxTradesPerDay, maxDailyLossR: base.maxDailyLossR,
         setups: base.setups,
       },

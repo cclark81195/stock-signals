@@ -8,11 +8,11 @@ const qty = (n) => (n == null ? "-" : Number.isInteger(n) ? String(n) : n.toLoca
 const sgn = (x, d = 2) => (x == null ? "-" : `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(d)}`);
 const pct0 = (x) => (x == null ? "-" : `${Math.round(x * 100)}%`);
 const cls = (x) => (x == null || x === 0 ? "" : x > 0 ? "pos" : "neg");
-const SETUP_NAMES = { orb: "Opening-range breakout", vwap: "VWAP reclaim", flag: "Bull flag", triangle: "Ascending triangle" };
+const SETUP_NAMES = { orb: "Opening-range breakout", vwap: "VWAP reclaim", flag: "Bull flag", triangle: "Ascending triangle", pullback: "Pullback to moving average", fib: "Fibonacci pullback", dbottom: "Double bottom", gap: "Gap and go" };
 const EXIT_NAMES = { target: "Target", stop: "Stop", "stop-gap": "Gap through stop", time: "End-of-day close", "session-end": "Session end" };
 
 const STORE_KEY = "daytrade-lab-settings";
-const CHECKS = { flag: "f-flag", tri: "f-tri", mkt: "f-mkt", inplay: "f-inplay" };
+const CHECKS = { flag: "f-flag", tri: "f-tri", pb: "f-pb", fib: "f-fib", dbot: "f-dbot", gap: "f-gap", mkt: "f-mkt", inplay: "f-inplay", midday: "f-midday", partial: "f-partial" };
 const fields = { equity: "f-equity", dollars: "f-dollars", riskPct: "f-risk", targetR: "f-target", slipBps: "f-slip", cryptoSlipBps: "f-cslip" };
 
 function loadSettings() {
@@ -157,7 +157,7 @@ function renderTrades(trades, total) {
     ? trades.map((t) => `<tr>
         <td>${esc(et(t.entryTime))}</td><td><strong>${esc(t.symbol)}</strong></td><td class="tight">${esc(SETUP_NAMES[t.setup] || t.setup)}</td>
         <td class="num">${price(t.entry)}</td><td class="num">${price(t.exit)}</td><td class="num">${qty(t.shares)}</td>
-        <td class="tight">${esc(EXIT_NAMES[t.exitReason] || t.exitReason)}</td>
+        <td class="tight">${esc(EXIT_NAMES[t.exitReason] || t.exitReason)}${t.partial ? ` <span class="dt-new" title="Half was sold at +1R, then the stop moved to the buy price">&frac12; at 1R</span>` : ""}</td>
         <td class="num ${cls(t.netR)}">${sgn(t.netR)}R</td><td class="num ${cls(t.pnl)}">${money(t.pnl)}</td>
       </tr>`).join("")
     : `<tr><td colspan="9" class="dt-empty">No trades.</td></tr>`;
@@ -588,7 +588,7 @@ function balSelect(i) {
   bal.sel = i;
   const t = e.t;
   const buy = `Bought ${qty(t.shares)} ${t.symbol} at ${price(t.entry)} (${money(t.shares * t.entry)}) on ${et(t.entryTime)}`;
-  const sell = `sold at ${price(t.exit)} on ${et(t.exitTime)}, ${EXIT_NAMES[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${sgn(t.netR)}R)`;
+  const sell = `${t.partial ? `sold ${qty(t.partial.shares)} at ${price(t.partial.price)} (+1R), then the rest ` : ""}sold at ${price(t.exit)} on ${et(t.exitTime)}, ${EXIT_NAMES[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${sgn(t.netR)}R)`;
   q(".bal-detail").textContent = `${SETUP_NAMES[t.setup] || t.setup}. ${buy}; ${sell}. Balance after the sale: ${money(bal.events.find((x) => x.kind === "sell" && x.k === e.k).balance)}.`;
   balDraw();
   const m = box.querySelector(`[data-i="${i}"]`);
@@ -753,8 +753,8 @@ function spProgress(done, total, extra = "") {
 }
 
 function spSettingsNote(s) {
-  const on = [s.orb && "opening-range breakout", s.vwap && "VWAP reclaim", s.flag && "bull flag", s.tri && "ascending triangle"].filter(Boolean);
-  const filt = [s.mkt && "market up", s.inplay && "in play"].filter(Boolean);
+  const on = [s.orb && "opening-range breakout", s.vwap && "VWAP reclaim", s.flag && "bull flag", s.tri && "ascending triangle", s.pb && "pullback", s.fib && "Fibonacci", s.dbot && "double bottom", s.gap && "gap and go"].filter(Boolean);
+  const filt = [s.mkt && "market up", s.inplay && "in play", s.midday && "no midday", s.partial && "half off at 1R"].filter(Boolean);
   return `Settings used: ${on.join(", ") || "no setups"}${filt.length ? `; filters: ${filt.join(", ")}` : ""}; ${s.exit === "measured" ? "measured-move" : `${s.targetR}R`} target; ${s.slipBps} bps slippage; $${Number(s.equity).toLocaleString("en-US")} account, ${Number(s.dollars) > 0 ? `$${s.dollars} per buy` : `${s.riskPct}% risk`}.`;
 }
 
@@ -762,7 +762,7 @@ async function spRun(only = null) {
   if (sp.running || !sp.stocks.length) return;
   const s = readForm();
   saveSettings(s);
-  if (!s.orb && !s.vwap && !s.flag && !s.tri) {
+  if (!s.orb && !s.vwap && !s.flag && !s.tri && !s.pb && !s.fib && !s.dbot && !s.gap) {
     $("sp-status").className = "status error";
     $("sp-status").textContent = "Switch on at least one setup above first.";
     return;
