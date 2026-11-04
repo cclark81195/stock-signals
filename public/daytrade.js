@@ -189,6 +189,21 @@ function render(data, equity) {
   $("dt-updated").innerHTML = `Run at <strong>${new Date(data.generatedAt * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</strong>`;
 }
 
+// The settings (everything except which symbols) as query parameters, shared by the normal run and the S&P 500 scan.
+function settingsParams(s) {
+  const qs = new URLSearchParams();
+  if (s.equity) qs.set("equity", s.equity);
+  if (s.riskPct) qs.set("riskPct", s.riskPct);
+  if (s.targetR) qs.set("targetR", s.targetR);
+  if (s.slipBps !== "") qs.set("slipBps", s.slipBps);
+  if (s.cryptoSlipBps !== "") qs.set("cryptoSlipBps", s.cryptoSlipBps);
+  qs.set("orb", s.orb ? "1" : "0");
+  qs.set("vwap", s.vwap ? "1" : "0");
+  for (const k of Object.keys(CHECKS)) qs.set(k, s[k] ? "1" : "0");
+  qs.set("exit", s.exit);
+  return qs;
+}
+
 // ---------------------------------------------------------------- running
 let runToken = 0;
 async function run() {
@@ -200,17 +215,8 @@ async function run() {
     return;
   }
   const token = ++runToken;
-  const qs = new URLSearchParams();
+  const qs = settingsParams(s);
   qs.set("symbols", s.symbols);
-  if (s.equity) qs.set("equity", s.equity);
-  if (s.riskPct) qs.set("riskPct", s.riskPct);
-  if (s.targetR) qs.set("targetR", s.targetR);
-  if (s.slipBps !== "") qs.set("slipBps", s.slipBps);
-  if (s.cryptoSlipBps !== "") qs.set("cryptoSlipBps", s.cryptoSlipBps);
-  qs.set("orb", s.orb ? "1" : "0");
-  qs.set("vwap", s.vwap ? "1" : "0");
-  for (const k of Object.keys(CHECKS)) qs.set(k, s[k] ? "1" : "0");
-  qs.set("exit", s.exit);
 
   $("f-run").disabled = true;
   $("dt-status").className = "status";
@@ -409,7 +415,221 @@ async function loadOptions() {
   }
   renderChips();
   renderList();
+  spOptionsLoaded();
 }
+
+
+// ================================================================ S&P 500 scan
+// Runs the current settings on every S&P 500 stock, ten at a time (the API's per-run limit),
+// two batches in flight. Each batch returns small ADDABLE totals per stock, so the page can
+// combine them exactly into sector and whole-index numbers.
+const sp = { rows: new Map(), failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, stocks: [], used: "" };
+const SP_BATCH = 10, SP_PARALLEL = 2;
+
+function spStocks() {
+  return picker.options.filter((o) => o.tag !== "ETF" && o.tag !== "Crypto").map((o) => ({ symbol: o.symbol, sector: o.tag, name: o.name }));
+}
+function spOptionsLoaded() {
+  sp.stocks = spStocks();
+  const ok = sp.stocks.length >= 100;
+  $("sp-run").disabled = !ok || sp.running;
+  if (!ok && !sp.rows.size) $("sp-status").textContent = "The S&P 500 list could not be loaded, so the scan is unavailable right now. Reload the page to try again.";
+}
+
+const spSum = (list, key = "all") => {
+  const t = { trades: 0, wins: 0, sumNetR: 0, sumGrossR: 0, sumWinR: 0, sumLossR: 0, pnl: 0 };
+  for (const r of list) { const c = r[key]; if (!c) continue; for (const k of Object.keys(t)) t[k] += c[k]; }
+  return t;
+};
+const spExp = (c) => (c && c.trades ? c.sumNetR / c.trades : null);
+const spPF = (c) => (c && c.sumLossR > 0 ? c.sumWinR / c.sumLossR : null);
+
+function spRowView(r) {
+  const sector = (sp.stocks.find((x) => x.symbol === r.symbol) || {}).sector || "";
+  const a = r.all;
+  return {
+    symbol: r.symbol, sector, trades: a.trades, winRate: a.trades ? a.wins / a.trades : null,
+    exp: spExp(a), expGross: a.trades ? a.sumGrossR / a.trades : null, totalR: a.sumNetR, pnl: a.pnl,
+    expFirst: spExp(r.first), nFirst: r.first.trades, expSecond: spExp(r.second), nSecond: r.second.trades,
+  };
+}
+
+function spRender() {
+  const rows = [...sp.rows.values()];
+  if (!rows.length) { $("sp-results").hidden = true; return; }
+  $("sp-results").hidden = false;
+  const all = spSum(rows), first = spSum(rows, "first"), second = spSum(rows, "second");
+  const total = sp.stocks.length;
+  $("sp-tiles").innerHTML = [
+    tile("Stocks tested", String(rows.length), `of ${total}`, "", "Stocks that were tested without an error. A stock with no trades still counts as tested."),
+    tile("Trades", all.trades.toLocaleString("en-US"), `${rows.filter((r) => r.all.trades).length} stocks traded`, "", "Total simulated trades across every stock."),
+    tile("Per trade, after costs", all.trades ? `${sgn(spExp(all))}R` : "-", "the number that matters", cls(spExp(all)), "Average result of one trade after costs, in R. Above zero is what you need."),
+    tile("Win rate", all.trades ? pct0(all.wins / all.trades) : "-", "", "", "Share of trades that made money after costs."),
+    tile("Profit factor", spPF(all) == null ? "-" : spPF(all).toFixed(2), "above 1 means wins outweigh losses", spPF(all) == null ? "" : spPF(all) > 1 ? "pos" : "neg", "Money won divided by money lost."),
+    tile("Total result", money(all.pnl), `${sgn(all.sumNetR, 1)}R`, cls(all.pnl), "Every stock's result added together, as if each had its own account of the size above. Not one account's result."),
+    tile("Older half", first.trades ? `${sgn(spExp(first))}R` : "-", `${first.trades} trades, per trade`, cls(spExp(first)), "Per-trade result using only the older half of the tested days."),
+    tile("Newer half", second.trades ? `${sgn(spExp(second))}R` : "-", `${second.trades} trades, per trade`, cls(spExp(second)), "Per-trade result using only the newer half. If it disagrees with the older half, treat the result as noise."),
+  ].join("");
+
+  // by sector
+  const bySector = new Map();
+  for (const r of rows) {
+    const sec = (sp.stocks.find((x) => x.symbol === r.symbol) || {}).sector || "Other";
+    if (!bySector.has(sec)) bySector.set(sec, []);
+    bySector.get(sec).push(r);
+  }
+  const secRows = [...bySector.entries()].map(([name, list]) => ({ name, n: list.length, a: spSum(list), f: spSum(list, "first"), s: spSum(list, "second") }))
+    .sort((x, y) => (spExp(y.a) ?? -99) - (spExp(x.a) ?? -99));
+  const half = (c) => (c.trades ? `${sgn(spExp(c))}R <span class="hint">(${c.trades})</span>` : "-");
+  $("sp-sectors").innerHTML = secRows.map((x) => `<tr>
+      <td>${esc(x.name)}</td><td class="num">${x.n}</td><td class="num">${x.a.trades}</td>
+      <td class="num">${x.a.trades ? pct0(x.a.wins / x.a.trades) : "-"}</td>
+      <td class="num ${cls(spExp(x.a))}">${x.a.trades ? sgn(spExp(x.a)) + "R" : "-"}</td>
+      <td class="num ${cls(x.a.pnl)}">${money(x.a.pnl)}</td>
+      <td class="num ${cls(spExp(x.f))}">${half(x.f)}</td><td class="num ${cls(spExp(x.s))}">${half(x.s)}</td></tr>`).join("");
+
+  spRenderStocks();
+  const nFailed = sp.failed.length;
+  $("sp-failed").hidden = !nFailed;
+  $("sp-failed").textContent = nFailed ? `${nFailed} stock${nFailed === 1 ? "" : "s"} could not be tested (usually Yahoo rate-limiting or missing data): ${sp.failed.slice(0, 40).join(", ")}${nFailed > 40 ? ", ..." : ""}. Use "Retry failed" to try them again.` : "";
+  $("sp-retry").hidden = !nFailed || sp.running;
+  $("sp-csv").hidden = false;
+}
+
+function spRenderStocks() {
+  const min = Number($("sp-min").value) || 1;
+  const view = [...sp.rows.values()].map(spRowView).filter((v) => v.trades >= min);
+  const { k, dir } = sp.sort;
+  view.sort((a, b) => {
+    const x = a[k], y = b[k];
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return typeof x === "string" ? dir * x.localeCompare(y) : dir * (x - y);
+  });
+  const shown = view.slice(0, sp.limit);
+  const half = (e, n) => (e == null ? "-" : `${sgn(e)}R <span class="hint">(${n})</span>`);
+  $("sp-body").innerHTML = shown.length ? shown.map((v) => `<tr>
+      <td><strong>${esc(v.symbol)}</strong></td><td class="tight">${esc(v.sector)}</td><td class="num">${v.trades}</td>
+      <td class="num">${pct0(v.winRate)}</td>
+      <td class="num ${cls(v.exp)}">${sgn(v.exp)}R</td><td class="num ${cls(v.pnl)}">${money(v.pnl)}</td>
+      <td class="num ${cls(v.expFirst)}">${half(v.expFirst, v.nFirst)}</td><td class="num ${cls(v.expSecond)}">${half(v.expSecond, v.nSecond)}</td></tr>`).join("")
+    : `<tr><td colspan="8" class="dt-empty">No stock has that many trades yet.</td></tr>`;
+  $("sp-shown").textContent = `${view.length} of ${sp.rows.size} tested stocks have at least ${min} trade${min === 1 ? "" : "s"}.`;
+  const more = $("sp-more");
+  more.hidden = view.length <= sp.limit;
+  more.textContent = `Show all ${view.length}`;
+  document.querySelectorAll("#sp-table th.sortable").forEach((th) => {
+    th.setAttribute("aria-sort", th.dataset.k === k ? (dir > 0 ? "ascending" : "descending") : "none");
+  });
+}
+
+function spProgress(done, total, extra = "") {
+  $("sp-bar").style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
+  $("sp-progress-text").textContent = `${done} of ${total} stocks${extra}`;
+}
+
+function spSettingsNote(s) {
+  const on = [s.orb && "opening-range breakout", s.vwap && "VWAP reclaim", s.flag && "bull flag", s.tri && "ascending triangle"].filter(Boolean);
+  const filt = [s.mkt && "market up", s.inplay && "in play"].filter(Boolean);
+  return `Settings used: ${on.join(", ") || "no setups"}${filt.length ? `; filters: ${filt.join(", ")}` : ""}; ${s.exit === "measured" ? "measured-move" : `${s.targetR}R`} target; ${s.slipBps} bps slippage; $${Number(s.equity).toLocaleString("en-US")} account, ${s.riskPct}% risk.`;
+}
+
+async function spRun(only = null) {
+  if (sp.running || !sp.stocks.length) return;
+  const s = readForm();
+  saveSettings(s);
+  if (!s.orb && !s.vwap && !s.flag && !s.tri) {
+    $("sp-status").className = "status error";
+    $("sp-status").textContent = "Switch on at least one setup above first.";
+    return;
+  }
+  const symbols = only || sp.stocks.map((x) => x.symbol);
+  if (!only) sp.rows.clear();
+  sp.failed = [];
+  sp.running = true; sp.cancel = false;
+  sp.used = spSettingsNote(s);
+  $("sp-used").textContent = sp.used;
+  $("sp-run").disabled = true; $("sp-cancel").hidden = false; $("sp-retry").hidden = true;
+  $("sp-progress").hidden = false;
+  $("sp-status").className = "status";
+  $("sp-status").textContent = only ? "Retrying the stocks that failed..." : "Scanning the S&P 500. You can keep this page open while it runs...";
+
+  const queue = [];
+  for (let i = 0; i < symbols.length; i += SP_BATCH) queue.push(symbols.slice(i, i + SP_BATCH));
+  const warnings = new Set();
+  let done = 0, lastErr = "";
+  const worker = async () => {
+    while (!sp.cancel) {
+      const batch = queue.shift();
+      if (!batch) return;
+      try {
+        const qs = settingsParams(s);
+        qs.set("symbols", batch.join(","));
+        qs.set("scan", "1");
+        const r = await fetch(`/api/daytrade?${qs}`);
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
+        (data.warnings || []).forEach((w) => warnings.add(w));
+        for (const row of data.symbols || []) {
+          if (row.error || !row.all) sp.failed.push(row.symbol); else sp.rows.set(row.symbol, row);
+        }
+      } catch (e) {
+        lastErr = e.message || String(e);
+        sp.failed.push(...batch);
+      }
+      done += batch.length;
+      spProgress(done, symbols.length, sp.failed.length ? `, ${sp.failed.length} failed` : "");
+      spRender();
+    }
+  };
+  await Promise.all(Array.from({ length: SP_PARALLEL }, worker));
+
+  const stopped = sp.cancel;
+  sp.running = false;
+  $("sp-cancel").hidden = true; $("sp-run").disabled = false; $("sp-progress").hidden = true;
+  if (stopped) sp.failed.push(...queue.flat()); // never started: offer them in "Retry failed"
+  spRender();
+  $("sp-status").className = sp.rows.size ? "status" : "status error";
+  $("sp-status").textContent = (stopped ? "Stopped. " : "Done. ") + `${sp.rows.size} stocks tested${sp.failed.length ? `, ${sp.failed.length} not tested${lastErr ? ` (last error: ${lastErr})` : ""}` : ""}.`
+    + (warnings.size ? " " + [...warnings].join(" ") : "");
+}
+
+function spCsv() {
+  const head = ["symbol", "sector", "trades", "win_rate", "net_r_per_trade", "gross_r_per_trade", "total_net_r", "pnl_dollars", "older_half_trades", "older_half_net_r_per_trade", "newer_half_trades", "newer_half_net_r_per_trade"];
+  const f = (x, d = 4) => (x == null ? "" : Number(x).toFixed(d));
+  const lines = [head.join(",")];
+  for (const r of [...sp.rows.values()]) {
+    const v = spRowView(r);
+    lines.push([v.symbol, `"${v.sector.replace(/"/g, '""')}"`, v.trades, f(v.winRate), f(v.exp), f(v.expGross), f(v.totalR, 2), f(v.pnl, 2), v.nFirst, f(v.expFirst), v.nSecond, f(v.expSecond)].join(","));
+  }
+  const blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `sp500-scan-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function spInit() {
+  $("sp-run").addEventListener("click", () => spRun());
+  $("sp-cancel").addEventListener("click", () => { sp.cancel = true; $("sp-status").textContent = "Stopping after the batches already running..."; });
+  $("sp-retry").addEventListener("click", () => spRun([...new Set(sp.failed)]));
+  $("sp-csv").addEventListener("click", spCsv);
+  $("sp-min").addEventListener("change", () => { sp.limit = 50; spRenderStocks(); });
+  $("sp-more").addEventListener("click", () => { sp.limit = 1000; spRenderStocks(); });
+  document.querySelectorAll("#sp-table th.sortable").forEach((th) => {
+    th.tabIndex = 0;
+    const go = () => {
+      const k = th.dataset.k;
+      sp.sort = { k, dir: sp.sort.k === k ? -sp.sort.dir : (k === "symbol" || k === "sector" ? 1 : -1) };
+      spRenderStocks();
+    };
+    th.addEventListener("click", go);
+    th.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  });
+}
+spInit();
 
 $("dt-form").addEventListener("submit", (e) => { e.preventDefault(); run(); });
 wirePicker();

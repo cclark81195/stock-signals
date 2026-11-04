@@ -1,12 +1,12 @@
 // GET /api/daytrade?symbols=SPY,AAPL,BTC-USD&equity=10000&riskPct=0.5&targetR=2&slipBps=2&cryptoSlipBps=10&orb=1&vwap=1
-//   &flag=1&tri=1 (pattern setups)  &exit=measured  &mkt=1 (SPY above VWAP)  &inplay=1 (unusual early volume)
+//   &scan=1 (compact per-symbol totals for the S&P 500 scan)  &flag=1&tri=1 (pattern setups)  &exit=measured  &mkt=1 (SPY above VWAP)  &inplay=1 (unusual early volume)
 // Day Trade Lab: latest-session setups plus a cost-aware backtest of the last ~60 days of
 // 5-minute bars (the most Yahoo provides). Stocks use the 9:30-16:00 ET session; crypto uses
 // UTC days. Research only; it places no orders. Cached at Vercel's edge for 5 minutes.
 import { fetchChart, mapLimit } from "../lib/yahoo.js";
 import { makeConfig, DEFAULTS } from "../lib/daytrade/config.js";
 import { toSessions, aboveVwapMap } from "../lib/daytrade/sessions.js";
-import { backtestSymbol, scanLatest, summarize } from "../lib/daytrade/backtest.js";
+import { backtestSymbol, scanLatest, summarize, compactStats } from "../lib/daytrade/backtest.js";
 import { configFor, profileFor, todayFor, PROFILES } from "../lib/daytrade/markets.js";
 
 const clamp = (v, lo, hi) => {
@@ -40,6 +40,7 @@ export default async function handler(req, res) {
   const cryptoSlip = clamp(q.cryptoSlipBps, 0, 100) ?? 10;
 
   const warnings = [];
+  const scanMode = q.scan === "1";
   try {
     // The market filter needs SPY's 5-minute bars once, shared by every stock.
     let marketOk = null;
@@ -63,7 +64,19 @@ export default async function handler(req, res) {
       // Keep an unfinished session out of the backtest so a half-day never counts as a full one.
       const latest = sessions[sessions.length - 1];
       const inProgress = latest && latest.date === today && latest.bars[latest.bars.length - 1].min < profile.closeMin - 10;
-      const { trades, sessionsTested } = backtestSymbol(symbol, inProgress ? sessions.slice(0, -1) : sessions, cfg, mk);
+      const used = inProgress ? sessions.slice(0, -1) : sessions;
+      const { trades, sessionsTested } = backtestSymbol(symbol, used, cfg, mk);
+      if (scanMode) {
+        // Split the tested days in half by date so the page can show "older half vs newer half".
+        const tested = used.slice(1);
+        const splitDate = tested.length ? tested[Math.floor(tested.length / 2)].date : null;
+        return {
+          symbol, assetClass: profile === PROFILES.crypto ? "crypto" : "stocks", sessions: sessionsTested, splitDate,
+          all: compactStats(trades),
+          first: compactStats(trades.filter((t) => t.date < splitDate)),
+          second: compactStats(trades.filter((t) => t.date >= splitDate)),
+        };
+      }
       return {
         symbol,
         assetClass: profile === PROFILES.crypto ? "crypto" : "stocks",
@@ -73,6 +86,15 @@ export default async function handler(req, res) {
         trades,
       };
     });
+
+    if (scanMode) {
+      res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=900");
+      res.status(200).json({
+        generatedAt: Math.floor(Date.now() / 1000), warnings,
+        symbols: results.map((r, i) => (r.ok ? r.value : { symbol: symbols[i], error: String(r.error?.message || r.error) })),
+      });
+      return;
+    }
 
     const rows = [], allTrades = [];
     const byClassTrades = { stocks: [], crypto: [] };

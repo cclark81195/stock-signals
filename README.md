@@ -87,7 +87,7 @@ P/E is shown for context only; it doesn't change the BUY / SELL / HOLD verdict.
 
 ## Project layout
 - `public/` - the website itself (`index.html`, `styles.css`, `app.js`; Day Trade Lab: `daytrade.html`, `daytrade.css`, `daytrade.js`)
-- `api/` - server functions: `constituents` (index members), `quotes` (prices, P/E + verdicts), `chart` (trend chart data), `indicator-history` (the line behind each indicator's chart), `strategy` (per-stock plain-English strategy, headlines and next earnings date), `sector-pe` (sector average P/E), `daytrade` (Day Trade Lab setups and backtest), `daytrade-symbols` (the Day Trade Lab symbol picker: SPY, S&P 500, top 5 crypto)
+- `api/` - server functions: `constituents` (index members), `quotes` (prices, P/E + verdicts), `chart` (trend chart data), `indicator-history` (the line behind each indicator's chart), `strategy` (per-stock plain-English strategy, headlines and next earnings date), `sector-pe` (sector average P/E), `daytrade` (Day Trade Lab setups, backtest and the S&P 500 scan), `daytrade-symbols` (the Day Trade Lab symbol picker: SPY, S&P 500, top 5 crypto)
 - `lib/` - shared code: indicator math, Yahoo fetching, index member lists; `lib/daytrade/` holds the day-trading engine
 - `test/` - engine tests (`npm test`)
 

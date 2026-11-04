@@ -262,6 +262,69 @@
       </section>
     </div>
 
+    <section class="dt-scansec" id="dt-sp" aria-label="S&amp;P 500 scan">
+      <h2>S&amp;P 500 scan</h2>
+      <p class="hint">Runs the settings above on <strong>every S&amp;P 500 stock</strong>, ten at a time, and ranks how each one did. The symbols you picked at the top are not used here. It takes a few minutes.</p>
+      <p class="hint dt-ex">Read it as a test of the strategy, not a shopping list: with 500 stocks and only about 60 days of prices, the top of the list is mostly luck. Look at the whole-index and sector rows, and at whether the older and newer halves of the 60 days agree.</p>
+      <div class="dt-sp-actions">
+        <button type="button" id="sp-run" class="dt-run dt-sp-run" disabled>Scan the S&amp;P 500</button>
+        <button type="button" id="sp-cancel" class="dt-mini" hidden>Stop</button>
+        <button type="button" id="sp-retry" class="dt-mini" hidden>Retry failed</button>
+        <button type="button" id="sp-csv" class="dt-mini" hidden>Download CSV</button>
+      </div>
+      <div class="dt-progress" id="sp-progress" hidden><div class="dt-bar"><span id="sp-bar"></span></div><span class="hint" id="sp-progress-text"></span></div>
+      <p class="status" id="sp-status" role="status"></p>
+      <p class="hint" id="sp-used"></p>
+
+      <div id="sp-results" hidden>
+        <h3>The whole index</h3>
+        <div class="dt-tiles" id="sp-tiles"></div>
+        <p class="hint dt-ex">The older half is the first half of the tested days, the newer half the second. If the strategy only pays in one of them, it is probably noise.</p>
+
+        <h3>By sector</h3>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Sector</th>
+              <th class="num" title="Stocks in this sector that were tested">Stocks</th>
+              <th class="num" title="Number of simulated trades">Trades</th>
+              <th class="num" title="Share of trades that made money after costs">Win %</th>
+              <th class="num" title="Average result per trade after costs, in R">Net R / trade</th>
+              <th class="num" title="Profit or loss in dollars after costs">P&amp;L</th>
+              <th class="num" title="Average result per trade in the older half of the days">Older half</th>
+              <th class="num" title="Average result per trade in the newer half of the days">Newer half</th>
+            </tr></thead>
+            <tbody id="sp-sectors"></tbody>
+          </table>
+        </div>
+
+        <h3>Each stock</h3>
+        <div class="dt-sp-filters">
+          <label>Show stocks with at least
+            <select id="sp-min"><option value="1">1 trade</option><option value="5" selected>5 trades</option><option value="10">10 trades</option><option value="20">20 trades</option></select>
+          </label>
+          <span class="hint" id="sp-shown"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="stocks dt-table" id="sp-table">
+            <thead><tr>
+              <th class="sortable" data-k="symbol" title="Ticker symbol. Click a heading to sort.">Symbol</th>
+              <th class="sortable" data-k="sector" title="Sector">Sector</th>
+              <th class="sortable num" data-k="trades" title="Number of simulated trades">Trades</th>
+              <th class="sortable num" data-k="winRate" title="Share of trades that made money after costs">Win %</th>
+              <th class="sortable num" data-k="exp" title="Average result per trade after costs, in R">Net R / trade</th>
+              <th class="sortable num" data-k="pnl" title="Profit or loss in dollars after costs">P&amp;L</th>
+              <th class="sortable num" data-k="expFirst" title="Average result per trade in the older half of the days (trades)">Older half</th>
+              <th class="sortable num" data-k="expSecond" title="Average result per trade in the newer half of the days (trades)">Newer half</th>
+            </tr></thead>
+            <tbody id="sp-body"></tbody>
+          </table>
+        </div>
+        <button type="button" id="sp-more" class="dt-mini" hidden></button>
+        <p class="hint" id="sp-failed" hidden></p>
+      </div>
+    </section>
+
     <details class="about dt-about">
       <summary>How the strategy and the safety rules work</summary>
       <p><strong>Opening-range breakout.</strong> The first 15 minutes set a high and a low. If a 5-minute bar closes above the high before 11:30 ET, on more than 1.5x the day's average volume and above VWAP, the system buys at the next bar's open. The stop is the bottom of the opening range.</p>

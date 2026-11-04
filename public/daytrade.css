@@ -133,3 +133,19 @@ body.dt-explain .dt-ex { display: block; }
 
 .dt-total td { font-weight: 700; border-top: 2px solid var(--border); }
 .dt-table td.tight { white-space: normal; min-width: 90px; line-height: 1.25; }
+
+/* S&P 500 scan */
+.dt-scansec { margin-top: 28px; padding-top: 8px; border-top: 1px solid var(--border); }
+.dt-scansec h3 { font-size: 1rem; margin: 18px 0 8px; }
+.dt-sp-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+.dt-sp-run { width: auto; padding-left: 22px; padding-right: 22px; }
+.dt-sp-run:disabled { opacity: 0.55; cursor: not-allowed; }
+.dt-progress { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
+.dt-bar { flex: 1 1 auto; height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.dt-bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+.dt-sp-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 8px; font-size: 0.84rem; color: var(--text-2); }
+.dt-sp-filters select { font: inherit; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+#sp-table th.sortable { cursor: pointer; }
+#sp-table th.sortable[aria-sort="ascending"]::after { content: " \2191"; }
+#sp-table th.sortable[aria-sort="descending"]::after { content: " \2193"; }
+#sp-more { margin-top: 8px; }
