@@ -18,7 +18,7 @@
   box-shadow: var(--shadow); padding: 16px;
 }
 .dt-controls label { display: flex; flex-direction: column; gap: 5px; font-size: 0.78rem; color: var(--muted); font-weight: 600; min-width: 0; }
-.dt-controls label.wide { grid-column: 1 / -1; }
+.dt-controls label.wide, .dt-controls .wide { grid-column: 1 / -1; }
 .dt-controls input[type="number"], .dt-controls input[type="text"] {
   padding: 9px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
   font-size: 1rem; color: var(--text); width: 100%; min-width: 0;
@@ -116,3 +116,12 @@
   .dt-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-tile .v { font-size: 1.25rem; }
 }
+
+/* Explanations: collapsed by default, one toggle opens them all */
+.dt-ex { display: none; }
+body.dt-explain .dt-ex { display: block; }
+.dt-explainbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 10px; }
+.dt-explain-btn { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 0.84rem; font-weight: 600; color: var(--accent); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.dt-explain-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dt-chev { width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 0.15s; }
+.dt-explain-btn[aria-expanded="true"] .dt-chev { transform: rotate(45deg); }

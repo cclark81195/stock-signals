@@ -41,7 +41,7 @@ const et = (ts) => new Date(ts * 1000).toLocaleString("en-US", { timeZone: "Amer
 
 // ---------------------------------------------------------------- rendering
 function tile(label, value, sub = "", klass = "", desc = "") {
-  return `<div class="dt-tile"><div class="k">${esc(label)}</div><div class="v ${klass}">${value}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}${desc ? `<div class="d">${esc(desc)}</div>` : ""}</div>`;
+  return `<div class="dt-tile"><div class="k">${esc(label)}</div><div class="v ${klass}">${value}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}${desc ? `<div class="d dt-ex">${esc(desc)}</div>` : ""}</div>`;
 }
 
 function renderTiles(a, equity) {
@@ -398,3 +398,16 @@ wirePicker();
 loadSettings();
 loadOptions();
 run();
+
+// Show/hide every explanation (setting help, tile and chart notes, column guides). Collapsed by default.
+(function wireExplain() {
+  const btn = document.getElementById("dt-explain");
+  if (!btn) return;
+  const apply = (on) => {
+    document.body.classList.toggle("dt-explain", on);
+    btn.setAttribute("aria-expanded", String(on));
+    document.getElementById("dt-explain-label").textContent = on ? "Hide explanations" : "Show explanations";
+    document.querySelectorAll("details.dt-guide").forEach((d) => { d.open = on; });
+  };
+  btn.addEventListener("click", () => apply(btn.getAttribute("aria-expanded") !== "true"));
+})();

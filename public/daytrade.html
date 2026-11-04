@@ -28,26 +28,33 @@
       It places no orders. Automation comes later, once the numbers hold up.
     </p>
 
+    <div class="dt-explainbar">
+      <button type="button" id="dt-explain" class="dt-explain-btn" aria-expanded="false">
+        <span class="dt-chev" aria-hidden="true"></span><span id="dt-explain-label">Show explanations</span>
+      </button>
+      <span class="help">What every setting, number and column means. Hidden by default to save space.</span>
+    </div>
+
     <form class="dt-controls" id="dt-form" autocomplete="off">
       <label>Account size ($)
         <input id="f-equity" type="number" min="500" step="500" value="10000" inputmode="numeric" aria-describedby="h-equity" />
-        <span class="help" id="h-equity">The money the bot is allowed to trade. It decides how many shares each trade can use. Use the amount you would put in a separate trading account.</span>
+        <span class="help dt-ex" id="h-equity">The money the bot is allowed to trade. It decides how many shares each trade can use. Use the amount you would put in a separate trading account.</span>
       </label>
       <label>Risk per trade (%)
         <input id="f-risk" type="number" min="0.05" max="2" step="0.05" value="0.5" inputmode="decimal" aria-describedby="h-risk" />
-        <span class="help" id="h-risk">The most you lose if a trade hits its stop, as a share of the account. 0.5% of $10,000 is $50. The further away the stop, the fewer shares it buys. Range 0.05 to 2.</span>
+        <span class="help dt-ex" id="h-risk">The most you lose if a trade hits its stop, as a share of the account. 0.5% of $10,000 is $50. The further away the stop, the fewer shares it buys. Range 0.05 to 2.</span>
       </label>
       <label>Profit target (R)
         <input id="f-target" type="number" min="0.5" max="5" step="0.5" value="2" inputmode="decimal" aria-describedby="h-target" />
-        <span class="help" id="h-target">Where to take profit, as a multiple of the risk. 2 means aiming to make twice what you risk. Higher targets are hit less often. Range 0.5 to 5.</span>
+        <span class="help dt-ex" id="h-target">Where to take profit, as a multiple of the risk. 2 means aiming to make twice what you risk. Higher targets are hit less often. Range 0.5 to 5.</span>
       </label>
       <label>Slippage (bps/side)
         <input id="f-slip" type="number" min="0" max="30" step="0.5" value="2" inputmode="decimal" aria-describedby="h-slip" />
-        <span class="help" id="h-slip">The cost of imperfect fills, charged on every buy and sell. 1 bp is 0.01%, so 2 bps is about 2 cents on a $100 stock. Use more for thinly traded stocks. Range 0 to 30.</span>
+        <span class="help dt-ex" id="h-slip">The cost of imperfect fills, charged on every buy and sell. 1 bp is 0.01%, so 2 bps is about 2 cents on a $100 stock. Use more for thinly traded stocks. Range 0 to 30.</span>
       </label>
       <label>Crypto slippage (bps/side)
         <input id="f-cslip" type="number" min="0" max="100" step="1" value="10" inputmode="decimal" aria-describedby="h-cslip" />
-        <span class="help" id="h-cslip">The same cost, for crypto only. Crypto trading costs are usually much higher than for stocks, so check what your platform really charges and set this to match. Range 0 to 100.</span>
+        <span class="help dt-ex" id="h-cslip">The same cost, for crypto only. Crypto trading costs are usually much higher than for stocks, so check what your platform really charges and set this to match. Range 0 to 100.</span>
       </label>
 
       <div class="wide dt-field">
@@ -64,20 +71,20 @@
           <span class="help" id="f-loaded"></span>
           <span class="help dt-note" id="f-note" role="status"></span>
         </div>
-        <span class="help" id="h-symbols">Pick up to 10. Every S&amp;P 500 stock is available, plus SPY (the S&amp;P 500 index fund) and the five biggest cryptocurrencies other than stablecoins: Bitcoin, Ethereum, BNB, XRP and Solana. Very heavily traded names work best, because tight bid-ask spreads are what keep small edges alive.</span>
+        <span class="help dt-ex" id="h-symbols">Pick up to 10. Every S&amp;P 500 stock is available, plus SPY (the S&amp;P 500 index fund) and the five biggest cryptocurrencies other than stablecoins: Bitcoin, Ethereum, BNB, XRP and Solana. Very heavily traded names work best, because tight bid-ask spreads are what keep small edges alive.</span>
       </div>
       <div class="dt-setups" role="group" aria-label="Setups">
         <div class="dt-setup">
           <label class="check"><input type="checkbox" id="f-orb" checked aria-describedby="h-orb" /> Opening-range breakout</label>
-          <span class="help" id="h-orb">Buys when price closes above the high of the first 15 minutes of trading (before 11:30 ET) on strong volume and above VWAP. The stop sits at the bottom of that opening range.</span>
+          <span class="help dt-ex" id="h-orb">Buys when price closes above the high of the first 15 minutes of trading (before 11:30 ET) on strong volume and above VWAP. The stop sits at the bottom of that opening range.</span>
         </div>
         <div class="dt-setup">
           <label class="check"><input type="checkbox" id="f-vwap" checked aria-describedby="h-vwap" /> VWAP reclaim</label>
-          <span class="help" id="h-vwap">Buys when price climbs back above VWAP (the day's volume-weighted average price) after spending most of the last half hour below it. The stop sits just under the recent lows.</span>
+          <span class="help dt-ex" id="h-vwap">Buys when price climbs back above VWAP (the day's volume-weighted average price) after spending most of the last half hour below it. The stop sits just under the recent lows.</span>
         </div>
       </div>
       <button type="submit" id="f-run" class="dt-run">Run backtest</button>
-      <p class="help dt-run-help">Runs the rules over about 60 days of 5-minute prices with the settings above. It takes a few seconds. Your settings are remembered on this device.</p>
+      <p class="help dt-ex dt-run-help">Runs the rules over about 60 days of 5-minute prices with the settings above. It takes a few seconds. Your settings are remembered on this device.</p>
     </form>
 
     <p class="status" id="dt-status" role="status"></p>
@@ -92,8 +99,8 @@
           <div class="dt-chart-title">Cumulative result, in R <span class="hint" id="dt-curve-note"></span></div>
           <div id="dt-curve"></div>
         </div>
-        <p class="hint">Each step on the line is one finished trade, in order, so a rising line means the rules made money and sharp drops are losing streaks. The dashed line is break-even.</p>
-        <p class="hint"><strong>R</strong> is the amount you risk on one trade: +2R means you made twice what you risked, &minus;1R means you lost exactly what you risked. "Before costs" ignores slippage; "after costs" includes it.</p>
+        <p class="hint dt-ex">Each step on the line is one finished trade, in order, so a rising line means the rules made money and sharp drops are losing streaks. The dashed line is break-even.</p>
+        <p class="hint dt-ex"><strong>R</strong> is the amount you risk on one trade: +2R means you made twice what you risked, &minus;1R means you lost exactly what you risked. "Before costs" ignores slippage; "after costs" includes it.</p>
       </section>
 
       <section aria-label="Today's setups">
