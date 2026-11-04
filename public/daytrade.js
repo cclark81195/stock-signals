@@ -73,10 +73,10 @@ function renderTiles(a, equity) {
   ].join("");
 }
 
-function renderCurve(curve) {
+function renderCurve(curve, box = "dt-curve", noteId = "dt-curve-note") {
   if (!curve || curve.length < 2) {
-    $("dt-curve").innerHTML = `<p class="dt-empty">Not enough trades to draw a curve.</p>`;
-    $("dt-curve-note").textContent = "";
+    $(box).innerHTML = `<p class="dt-empty">Not enough trades to draw a curve.</p>`;
+    $(noteId).textContent = "";
     return;
   }
   const W = 640, H = 170, pl = 44, pr = 10, pt = 10, pb = 22;
@@ -86,7 +86,7 @@ function renderCurve(curve) {
   const x = (i) => pl + (i / (curve.length - 1)) * (W - pl - pr);
   const y = (v) => pt + (1 - (v - lo) / (hi - lo)) * (H - pt - pb);
   const pts = curve.map((p, i) => `${x(i).toFixed(1)},${y(p.cumR).toFixed(1)}`).join(" ");
-  $("dt-curve").innerHTML = `
+  $(box).innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumulative result in R across ${curve.length} trades">
       <line class="zero" x1="${pl}" x2="${W - pr}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}"></line>
       <polyline class="line" points="${pts}"></polyline>
@@ -95,7 +95,7 @@ function renderCurve(curve) {
       <text class="lbl" x="${pl}" y="${H - 5}">${esc(curve[0].date)}</text>
       <text class="lbl" x="${W - pr}" y="${H - 5}" text-anchor="end">${esc(curve[curve.length - 1].date)}</text>
     </svg>`;
-  $("dt-curve-note").textContent = `${curve.length} trades`;
+  $(noteId).textContent = `${curve.length} trades`;
 }
 
 const STATE = {
@@ -185,7 +185,7 @@ function render(data, equity) {
   renderByClass(data);
   renderBySetup(a);
   renderTrades(data.recentTrades, data.tradesTotal ?? data.recentTrades.length);
-  renderBalance(data.recentTrades, data.config.equity, data.tradesTotal ?? data.recentTrades.length);
+  dashBalance.render(data.recentTrades, data.config.equity, data.tradesTotal ?? data.recentTrades.length);
   $("dt-results").hidden = false;
   $("dt-updated").innerHTML = `Run at <strong>${new Date(data.generatedAt * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</strong>`;
 }
@@ -425,10 +425,15 @@ async function loadOptions() {
 // ================================================================ account balance chart
 // Balance = account size + the dollar result of every sold trade so far. Buys and sells are placed on a
 // time axis where overnight and weekend gaps are squeezed out, so a day's trading looks like a day.
-const bal = { events: [], days: [], times: [], xOf: new Map(), equity: 0, win: null, offset: 0, total: 0, sel: -1 };
 const etDay = (ts) => new Date(ts * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 const dayLabel = (d) => { const [y, m, dd] = d.split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
 
+
+// One chart per card, so the main results and the S&P 500 scan each get their own.
+function makeBalanceChart(card) {
+  const q = (sel) => card.querySelector(sel);
+  const box = q(".bal-svg");
+  const bal = { events: [], days: [], times: [], xOf: new Map(), equity: 0, win: null, offset: 0, total: 0, sel: -1, key: "" };
 function balPrepare(trades, equity) {
   const list = [...trades].sort((a, b) => a.entryTime - b.entryTime || a.exitTime - b.exitTime);
   const events = [];
@@ -456,19 +461,29 @@ function balPrepare(trades, equity) {
   bal.days = [...new Set(events.map((e) => e.day))].sort();
 }
 
-function renderBalance(trades, equity, total) {
-  const card = $("dt-balcard");
+function render(trades, equity, total, key = "") {
   if (!trades || !trades.length) { card.hidden = true; return; }
   card.hidden = false;
-  const first = !bal.events.length || bal.total !== total || bal.equity !== equity;
+  const first = !bal.events.length || bal.total !== total || bal.equity !== equity || bal.key !== key;
   balPrepare(trades, equity);
-  bal.total = total;
+  bal.total = total; bal.key = key;
   if (bal.win == null || first) {
-    bal.win = bal.events.length <= 150 ? "all" : 5;
+    bal.win = balDefaultWindow();
     bal.offset = 0; bal.sel = -1;
   }
   balDraw();
-  $("dt-bal-note").textContent = total > trades.length ? `(newest ${trades.length} of ${total} trades)` : `(${trades.length} trades)`;
+  q(".bal-note").textContent = total > trades.length ? `(newest ${trades.length} of ${total} trades)` : `(${trades.length} trades)`;
+}
+
+function balDefaultWindow() {
+  // the widest range that still has a readable number of markers
+  const n = bal.days.length;
+  for (const w of ["all", 20, 5]) {
+    const k = w === "all" ? n : Math.min(w, n);
+    const set = new Set(bal.days.slice(n - k));
+    if (bal.events.filter((e) => set.has(e.day)).length <= 150) return w;
+  }
+  return 1;
 }
 
 function balWindowDays() {
@@ -544,7 +559,7 @@ function balDraw() {
 
   const startLine = start === 0 && bal.equity >= lo && bal.equity <= hi
     ? `<line class="start" x1="${pl}" x2="${W - pr}" y1="${Y(bal.equity).toFixed(1)}" y2="${Y(bal.equity).toFixed(1)}"></line>` : "";
-  $("dt-bal").innerHTML = `
+  box.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" role="group" aria-label="Account balance over ${shownDays.length} trading day${shownDays.length === 1 ? "" : "s"} with ${ev.length} buy and sell markers">
       <line class="grid" x1="${pl}" x2="${W - pr}" y1="${Y(hi).toFixed(1)}" y2="${Y(hi).toFixed(1)}"></line>
       <line class="grid" x1="${pl}" x2="${W - pr}" y1="${Y(lo).toFixed(1)}" y2="${Y(lo).toFixed(1)}"></line>
@@ -557,14 +572,14 @@ function balDraw() {
     </svg>`;
 
   // controls
-  document.querySelectorAll(".dt-balbar [data-win]").forEach((b) => {
+  card.querySelectorAll(".bal-win").forEach((b) => {
     const w = b.dataset.win === "all" ? "all" : Number(b.dataset.win);
     b.setAttribute("aria-pressed", String(w === bal.win));
   });
-  $("dt-bal-prev").disabled = start <= 0;
-  $("dt-bal-next").disabled = end >= n;
+  q(".bal-prev").disabled = start <= 0;
+  q(".bal-next").disabled = end >= n;
   const endBal = ev[ev.length - 1].kind === "sell" ? ev[ev.length - 1].balance : cur;
-  $("dt-bal-range").textContent = `${dayLabel(shownDays[0])}${shownDays.length > 1 ? ` to ${dayLabel(shownDays[shownDays.length - 1])}` : ""} (${shownDays.length} of ${n} days). Balance ${money(startBal)} → ${money(endBal)}.`;
+  q(".bal-range").textContent = `${dayLabel(shownDays[0])}${shownDays.length > 1 ? ` to ${dayLabel(shownDays[shownDays.length - 1])}` : ""} (${shownDays.length} of ${n} days). Balance ${money(startBal)} → ${money(endBal)}.`;
 }
 
 function balSelect(i) {
@@ -574,14 +589,14 @@ function balSelect(i) {
   const t = e.t;
   const buy = `Bought ${qty(t.shares)} ${t.symbol} at ${price(t.entry)} (${money(t.shares * t.entry)}) on ${et(t.entryTime)}`;
   const sell = `sold at ${price(t.exit)} on ${et(t.exitTime)}, ${EXIT_NAMES[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${sgn(t.netR)}R)`;
-  $("dt-bal-detail").textContent = `${SETUP_NAMES[t.setup] || t.setup}. ${buy}; ${sell}. Balance after the sale: ${money(bal.events.find((x) => x.kind === "sell" && x.k === e.k).balance)}.`;
+  q(".bal-detail").textContent = `${SETUP_NAMES[t.setup] || t.setup}. ${buy}; ${sell}. Balance after the sale: ${money(bal.events.find((x) => x.kind === "sell" && x.k === e.k).balance)}.`;
   balDraw();
-  const m = $("dt-bal").querySelector(`[data-i="${i}"]`);
+  const m = box.querySelector(`[data-i="${i}"]`);
   if (m && m.hasAttribute("tabindex")) m.focus();
 }
 
 function balInit() {
-  document.querySelectorAll(".dt-balbar [data-win]").forEach((b) => b.addEventListener("click", () => {
+  card.querySelectorAll(".bal-win").forEach((b) => b.addEventListener("click", () => {
     bal.win = b.dataset.win === "all" ? "all" : Number(b.dataset.win);
     bal.offset = 0;
     balDraw();
@@ -593,19 +608,23 @@ function balInit() {
     bal.offset = n - newEnd;
     balDraw();
   };
-  $("dt-bal-prev").addEventListener("click", () => shift(-1));
-  $("dt-bal-next").addEventListener("click", () => shift(1));
+  q(".bal-prev").addEventListener("click", () => shift(-1));
+  q(".bal-next").addEventListener("click", () => shift(1));
   const pick = (e) => { const m = e.target.closest(".mk"); if (m) balSelect(Number(m.dataset.i)); };
-  $("dt-bal").addEventListener("click", pick);
-  $("dt-bal").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.closest(".mk")) { e.preventDefault(); pick(e); } });
+  box.addEventListener("click", pick);
+  box.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.closest(".mk")) { e.preventDefault(); pick(e); } });
 }
-balInit();
+  balInit();
+  return { render };
+}
+const dashBalance = makeBalanceChart($("dt-balcard"));
 
 // ================================================================ S&P 500 scan
 // Runs the current settings on every S&P 500 stock, ten at a time (the API's per-run limit),
 // two batches in flight. Each batch returns small ADDABLE totals per stock, so the page can
 // combine them exactly into sector and whole-index numbers.
-const sp = { rows: new Map(), failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, stocks: [], used: "" };
+const sp = { rows: new Map(), failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, stocks: [], used: "", equity: 10000 };
+const spBalance = makeBalanceChart($("sp-balcard"));
 const SP_BATCH = 10, SP_PARALLEL = 2;
 
 function spStocks() {
@@ -678,6 +697,28 @@ function spRender() {
   $("sp-csv").hidden = false;
 }
 
+
+// Charts for the scan: all tested stocks together, or one stock. Drawn when a scan finishes (not batch by batch,
+// so the zoom does not jump while it runs).
+function spCurve(trades) {
+  let cum = 0;
+  return [...trades].sort((a, b) => a.exitTime - b.exitTime).map((t) => { cum += t.netR; return { cumR: Math.round(cum * 100) / 100, date: t.date }; });
+}
+function spRenderCharts() {
+  $("sp-charts").hidden = false;
+  const sel = $("sp-chart-sym");
+  const withTrades = [...sp.rows.values()].filter((r) => r.trades && r.trades.length).map((r) => r.symbol).sort();
+  const keep = sel.value;
+  sel.innerHTML = `<option value="">All stocks together</option>` + withTrades.map((x) => `<option value="${esc(x)}">${esc(x)}</option>`).join("");
+  sel.value = withTrades.includes(keep) ? keep : "";
+  const sym = sel.value;
+  const trades = [];
+  for (const r of sp.rows.values()) if (r.trades && (!sym || r.symbol === sym)) trades.push(...r.trades);
+  $("sp-chart-note").textContent = sym ? `${sym} only.` : `${withTrades.length} stocks with trades.`;
+  renderCurve(spCurve(trades), "sp-curve", "sp-curve-note");
+  spBalance.render(trades, sp.equity, trades.length, sym);
+}
+
 function spRenderStocks() {
   const min = Number($("sp-min").value) || 1;
   const view = [...sp.rows.values()].map(spRowView).filter((v) => v.trades >= min);
@@ -692,7 +733,7 @@ function spRenderStocks() {
   const shown = view.slice(0, sp.limit);
   const half = (e, n) => (e == null ? "-" : `${sgn(e)}R <span class="hint">(${n})</span>`);
   $("sp-body").innerHTML = shown.length ? shown.map((v) => `<tr>
-      <td><strong>${esc(v.symbol)}</strong></td><td class="tight">${esc(v.sector)}</td><td class="num">${v.trades}</td>
+      <td><button type="button" class="dt-linkbtn" data-sym="${esc(v.symbol)}" title="Show only ${esc(v.symbol)} in the charts above">${esc(v.symbol)}</button></td><td class="tight">${esc(v.sector)}</td><td class="num">${v.trades}</td>
       <td class="num">${pct0(v.winRate)}</td>
       <td class="num ${cls(v.exp)}">${sgn(v.exp)}R</td><td class="num ${cls(v.pnl)}">${money(v.pnl)}</td>
       <td class="num ${cls(v.expFirst)}">${half(v.expFirst, v.nFirst)}</td><td class="num ${cls(v.expSecond)}">${half(v.expSecond, v.nSecond)}</td></tr>`).join("")
@@ -731,11 +772,12 @@ async function spRun(only = null) {
   sp.failed = [];
   sp.running = true; sp.cancel = false;
   sp.used = spSettingsNote(s);
+  sp.equity = Number(s.equity) || 10000;
   $("sp-used").textContent = sp.used;
   $("sp-run").disabled = true; $("sp-cancel").hidden = false; $("sp-retry").hidden = true;
   $("sp-progress").hidden = false;
   $("sp-status").className = "status";
-  $("sp-status").textContent = only ? "Retrying the stocks that failed..." : "Scanning the S&P 500. You can keep this page open while it runs...";
+  $("sp-status").textContent = (only ? "Retrying the stocks that failed..." : "Scanning the S&P 500. You can keep this page open while it runs...") + " The charts appear when it finishes.";
 
   const queue = [];
   for (let i = 0; i < symbols.length; i += SP_BATCH) queue.push(symbols.slice(i, i + SP_BATCH));
@@ -772,6 +814,7 @@ async function spRun(only = null) {
   $("sp-cancel").hidden = true; $("sp-run").disabled = false; $("sp-progress").hidden = true;
   if (stopped) sp.failed.push(...queue.flat()); // never started: offer them in "Retry failed"
   spRender();
+  spRenderCharts();
   $("sp-status").className = sp.rows.size ? "status" : "status error";
   $("sp-status").textContent = (stopped ? "Stopped. " : "Done. ") + `${sp.rows.size} stocks tested${sp.failed.length ? `, ${sp.failed.length} not tested${lastErr ? ` (last error: ${lastErr})` : ""}` : ""}.`
     + (warnings.size ? " " + [...warnings].join(" ") : "");
@@ -798,6 +841,14 @@ function spInit() {
   $("sp-cancel").addEventListener("click", () => { sp.cancel = true; $("sp-status").textContent = "Stopping after the batches already running..."; });
   $("sp-retry").addEventListener("click", () => spRun([...new Set(sp.failed)]));
   $("sp-csv").addEventListener("click", spCsv);
+  $("sp-chart-sym").addEventListener("change", spRenderCharts);
+  $("sp-body").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sym]");
+    if (!b || sp.running) return;
+    $("sp-chart-sym").value = b.dataset.sym;
+    spRenderCharts();
+    $("sp-chart-sym").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
   $("sp-min").addEventListener("change", () => { sp.limit = 50; spRenderStocks(); });
   $("sp-more").addEventListener("click", () => { sp.limit = 1000; spRenderStocks(); });
   document.querySelectorAll("#sp-table th.sortable").forEach((th) => {

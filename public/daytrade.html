@@ -130,19 +130,19 @@
           <div id="dt-curve"></div>
         </div>
         <div class="dt-chart-card dt-balcard" id="dt-balcard">
-          <div class="dt-chart-title">Account balance, with every buy and sell <span class="hint" id="dt-bal-note"></span></div>
+          <div class="dt-chart-title">Account balance, with every buy and sell <span class="hint bal-note"></span></div>
           <div class="dt-balbar" role="group" aria-label="Chart range">
-            <button type="button" class="dt-mini" data-win="1">1 day</button>
-            <button type="button" class="dt-mini" data-win="5">5 days</button>
-            <button type="button" class="dt-mini" data-win="20">20 days</button>
-            <button type="button" class="dt-mini" data-win="all">All</button>
+            <button type="button" class="dt-mini bal-win" data-win="1">1 day</button>
+            <button type="button" class="dt-mini bal-win" data-win="5">5 days</button>
+            <button type="button" class="dt-mini bal-win" data-win="20">20 days</button>
+            <button type="button" class="dt-mini bal-win" data-win="all">All</button>
             <span class="dt-balspacer"></span>
-            <button type="button" class="dt-mini" id="dt-bal-prev" aria-label="Earlier days">&larr; Earlier</button>
-            <button type="button" class="dt-mini" id="dt-bal-next" aria-label="Later days">Later &rarr;</button>
+            <button type="button" class="dt-mini bal-prev" aria-label="Earlier days">&larr; Earlier</button>
+            <button type="button" class="dt-mini bal-next" aria-label="Later days">Later &rarr;</button>
           </div>
-          <div id="dt-bal"></div>
-          <p class="dt-ballegend"><span><i class="lg buy"></i> Buy</span> <span><i class="lg sell win"></i> Sell at a profit</span> <span><i class="lg sell loss"></i> Sell at a loss</span> <span class="hint" id="dt-bal-range"></span></p>
-          <p class="hint dt-baldetail" id="dt-bal-detail" aria-live="polite">Tap or click a marker to see that trade.</p>
+          <div class="bal-svg"></div>
+          <p class="dt-ballegend"><span><i class="lg buy"></i> Buy</span> <span><i class="lg sell win"></i> Sell at a profit</span> <span><i class="lg sell loss"></i> Sell at a loss</span> <span class="hint bal-range"></span></p>
+          <p class="hint dt-baldetail bal-detail" aria-live="polite">Tap or click a marker to see that trade.</p>
         </div>
         <p class="hint dt-ex">The balance chart starts from your account size and changes each time a trade is sold (closed). Triangles pointing up are buys and triangles pointing down are sells; a sell is green when the trade made money and red when it lost. Trades on different stocks that overlap in time are added to one balance as if there were enough money for all of them, and nothing compounds. The early-days view is zoomed out, so use the buttons to zoom in on a few days and see each buy and sell apart.</p>
         <p class="hint dt-ex">Each step on the line is one finished trade, in order, so a rising line means the rules made money and sharp drops are losing streaks. The dashed line is break-even.</p>
@@ -300,6 +300,35 @@
         <h3>The whole index</h3>
         <div class="dt-tiles" id="sp-tiles"></div>
         <p class="hint dt-ex">The older half is the first half of the tested days, the newer half the second. If the strategy only pays in one of them, it is probably noise.</p>
+
+        <div id="sp-charts" hidden>
+        <div class="dt-sp-chartpick">
+          <label>Charts show
+            <select id="sp-chart-sym"><option value="">All stocks together</option></select>
+          </label>
+          <span class="hint" id="sp-chart-note"></span>
+        </div>
+        <div class="dt-chart-card">
+          <div class="dt-chart-title">Cumulative result, in R <span class="hint" id="sp-curve-note"></span></div>
+          <div id="sp-curve"></div>
+        </div>
+        <div class="dt-chart-card dt-balcard" id="sp-balcard">
+          <div class="dt-chart-title">Account balance, with every buy and sell <span class="hint bal-note"></span></div>
+          <div class="dt-balbar" role="group" aria-label="Chart range">
+            <button type="button" class="dt-mini bal-win" data-win="1">1 day</button>
+            <button type="button" class="dt-mini bal-win" data-win="5">5 days</button>
+            <button type="button" class="dt-mini bal-win" data-win="20">20 days</button>
+            <button type="button" class="dt-mini bal-win" data-win="all">All</button>
+            <span class="dt-balspacer"></span>
+            <button type="button" class="dt-mini bal-prev" aria-label="Earlier days">&larr; Earlier</button>
+            <button type="button" class="dt-mini bal-next" aria-label="Later days">Later &rarr;</button>
+          </div>
+          <div class="bal-svg"></div>
+          <p class="dt-ballegend"><span><i class="lg buy"></i> Buy</span> <span><i class="lg sell win"></i> Sell at a profit</span> <span><i class="lg sell loss"></i> Sell at a loss</span> <span class="hint bal-range"></span></p>
+          <p class="hint dt-baldetail bal-detail" aria-live="polite">Tap or click a marker to see that trade.</p>
+        </div>
+        <p class="hint dt-ex">These charts add every tested stock's trades into one line, as if each stock had its own account of the size above, so the balance is not what one real account would do. Pick one stock in the menu to see only its trades, or click a symbol in the table below. The balance chart opens on the widest range that stays readable; use the buttons to zoom.</p>
+        </div>
 
         <h3>By sector</h3>
         <div class="table-wrap">

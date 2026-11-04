@@ -85,6 +85,8 @@ Not verified: how Robinhood handles fractional-share orders (whether limit order
 
 Under the cumulative-R chart, "Account balance, with every buy and sell" starts from the account size and steps at each sold trade by that trade's dollar result. Up triangles are buys; down triangles are sells (green profit, red loss). Overnight and weekend gaps are squeezed out of the time axis so a day's trading is readable; use 1 day / 5 days / 20 days / All and Earlier / Later to zoom, and click a marker for the trade's details. Overlapping trades on different stocks are added to one balance as if there were enough money for all of them, and nothing compounds. The API returns up to 1,500 trades (newest first); the chart says when it is showing a subset.
 
+The S&P 500 scan has the same two charts (cumulative R and account balance with buy/sell markers). Scan batches also return a trimmed trade list per stock (`/api/daytrade?scan=1`), and the page draws the charts when a scan finishes: all stocks added together, or one stock chosen from the menu or by clicking its symbol in the table. The combined balance treats every stock as having its own account of the chosen size, so it is a sum of independent backtests, not one account's history. The balance chart opens on the widest range with 150 or fewer markers.
+
 ## Known limits
 
 - Each symbol is backtested independently; the live guard is portfolio-wide, so the real bot will trade less than the backtest implies.

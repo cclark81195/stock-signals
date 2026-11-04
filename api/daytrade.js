@@ -76,6 +76,11 @@ export default async function handler(req, res) {
           all: compactStats(trades),
           first: compactStats(trades.filter((t) => t.date < splitDate)),
           second: compactStats(trades.filter((t) => t.date >= splitDate)),
+          // just what the charts need (no reason text, stop, target...)
+          trades: trades.map((t) => ({
+            symbol: t.symbol, date: t.date, setup: t.setup, entryTime: t.entryTime, exitTime: t.exitTime,
+            entry: t.entry, exit: t.exit, shares: t.shares, exitReason: t.exitReason, netR: t.netR, pnl: t.pnl,
+          })),
         };
       }
       return {
