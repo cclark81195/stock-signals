@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Day Trade Lab - Index Signal Scanner</title>
+  <meta name="description" content="Research tool: intraday setups, risk limits and a cost-aware backtest. Places no orders." />
+  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="daytrade.css" />
+</head>
+<body class="dt">
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo" src="logo.png" width="76" height="56" alt="FFS Global" />
+      <span>Day Trade Lab</span>
+    </div>
+    <a class="dt-link" href="/">&larr; Index scanner</a>
+    <p class="updated" id="dt-updated" role="status">Not run yet</p>
+  </header>
+
+  <main class="dt-main">
+    <p class="dt-banner">
+      <strong>Research only.</strong> This page finds quick in-and-out setups and tests them against the last ~60 days of 5-minute prices, with trading costs included.
+      It places no orders. Automation comes later, once the numbers hold up.
+    </p>
+
+    <form class="dt-controls" id="dt-form" autocomplete="off">
+      <label>Account size ($)<input id="f-equity" type="number" min="500" step="500" value="10000" inputmode="numeric" /></label>
+      <label>Risk per trade (%)<input id="f-risk" type="number" min="0.05" max="2" step="0.05" value="0.5" inputmode="decimal" /></label>
+      <label>Profit target (R)<input id="f-target" type="number" min="0.5" max="5" step="0.5" value="2" inputmode="decimal" /></label>
+      <label>Slippage (bps/side)<input id="f-slip" type="number" min="0" max="30" step="0.5" value="2" inputmode="decimal" /></label>
+      <label class="wide">Symbols (comma separated, max 10)<input id="f-symbols" type="text" value="SPY,QQQ,IWM,DIA,AAPL,MSFT,NVDA,TSLA" spellcheck="false" /></label>
+      <div class="dt-setups" role="group" aria-label="Setups">
+        <label class="check"><input type="checkbox" id="f-orb" checked /> Opening-range breakout</label>
+        <label class="check"><input type="checkbox" id="f-vwap" checked /> VWAP reclaim</label>
+      </div>
+      <button type="submit" id="f-run" class="dt-run">Run backtest</button>
+    </form>
+
+    <p class="status" id="dt-status" role="status"></p>
+
+    <div id="dt-results" hidden>
+      <p class="dt-warn" id="dt-warn" hidden></p>
+
+      <section aria-label="Backtest summary">
+        <h2>Backtest, all symbols</h2>
+        <div class="dt-tiles" id="dt-tiles"></div>
+        <div class="dt-chart-card">
+          <div class="dt-chart-title">Cumulative result, in R <span class="hint" id="dt-curve-note"></span></div>
+          <div id="dt-curve"></div>
+        </div>
+        <p class="hint">R is your risk on one trade: +2R means you made twice what you risked, &minus;1R means you lost exactly what you risked. "Before costs" ignores slippage, "after costs" includes it.</p>
+      </section>
+
+      <section aria-label="Today's setups">
+        <h2>Latest session</h2>
+        <p class="hint" id="dt-scan-note"></p>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Symbol</th><th>Status</th><th>Details</th>
+              <th class="num">Entry</th><th class="num">Stop</th><th class="num">Target</th><th class="num">Shares</th>
+            </tr></thead>
+            <tbody id="dt-scan"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-label="By symbol">
+        <h2>By symbol</h2>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Symbol</th><th class="num">Trades</th><th class="num">Win %</th>
+              <th class="num" title="Average result per trade after costs, in R">Net R / trade</th>
+              <th class="num" title="Gross wins divided by gross losses">Profit factor</th>
+              <th class="num">Total R</th><th class="num">Max drawdown</th>
+            </tr></thead>
+            <tbody id="dt-bysym"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-label="By setup">
+        <h2>By setup</h2>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr><th>Setup</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">Total R</th></tr></thead>
+            <tbody id="dt-bysetup"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-label="Recent trades">
+        <h2>Recent simulated trades</h2>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>When (ET)</th><th>Symbol</th><th>Setup</th><th class="num">Entry</th><th class="num">Exit</th>
+              <th>Exit reason</th><th class="num">Result</th><th class="num">P&amp;L</th>
+            </tr></thead>
+            <tbody id="dt-trades"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <details class="about dt-about">
+      <summary>How the strategy and the safety rules work</summary>
+      <p><strong>Opening-range breakout.</strong> The first 15 minutes set a high and a low. If a 5-minute bar closes above the high before 11:30 ET, on more than 1.5x the day's average volume and above VWAP, the system buys at the next bar's open. The stop is the bottom of the opening range.</p>
+      <p><strong>VWAP reclaim.</strong> After 10:00 ET, if price spent most of the last six bars below VWAP and then a green bar closes back above it on decent volume, it buys at the next open. The stop sits just under the last four bars' lows.</p>
+      <p><strong>Exits.</strong> A profit target at the chosen multiple of risk, the stop, or a flat-by time of 3:45 PM ET, whichever comes first. If one bar touches both stop and target, the test assumes the stop hit first.</p>
+      <p><strong>Risk rules (the same ones a live bot would run).</strong> Each trade risks a fixed percentage of the account. The system stops for the day after 3 trades, after losing 2R, or after 2 losses in a row. Stops that are tighter than normal 5-minute noise, or wider than 1% of price, are skipped. No leverage by default.</p>
+      <p><strong>Costs.</strong> Slippage is charged on every entry and stop or time exit. The gap between "before costs" and "after costs" shows how much of any edge trading costs would eat.</p>
+      <p><strong>Limits of this test.</strong> Yahoo only provides about 60 days of 5-minute data, which is a few dozen trades per symbol. That is enough to catch bugs, not enough to prove an edge. Each symbol is tested on its own, so portfolio-wide limits are only approximated. Long only. Earnings days and FOMC/CPI days are not filtered out yet.</p>
+    </details>
+  </main>
+
+  <footer class="disclaimer">
+    Prices from Yahoo Finance, usually delayed about 15 minutes. Backtests are simulations on past prices, not predictions, and nothing here is financial advice.
+  </footer>
+  <script type="module" src="daytrade.js"></script>
+</body>
+</html>
