@@ -13,7 +13,7 @@
 
 /* ---- controls ---- */
 .dt-controls {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: end;
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; align-items: start;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 16px;
 }
@@ -25,6 +25,44 @@
 }
 .dt-controls input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .help { font-size: 0.76rem; font-weight: 400; color: var(--muted); line-height: 1.4; }
+.dt-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dt-field-label { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+.dt-count { font-weight: 400; margin-left: 4px; }
+.dt-count.full { color: var(--hold); font-weight: 700; }
+.dt-picker {
+  position: relative; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); min-height: 46px;
+}
+.dt-picker:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
+.dt-chips { display: contents; }
+.dt-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border); font-size: 0.85rem; font-weight: 700; color: var(--text);
+}
+.dt-chip.crypto { background: var(--hold-bg); border-color: color-mix(in srgb, var(--hold) 35%, var(--border)); }
+.dt-chip button {
+  border: 0; background: transparent; color: var(--muted); font-size: 1.05rem; line-height: 1; width: 22px; height: 22px;
+  border-radius: 50%; display: grid; place-items: center; padding: 0;
+}
+.dt-chip button:hover { background: var(--border); color: var(--text); }
+.dt-picker input#f-search { flex: 1 1 160px; min-width: 120px; border: 0; background: transparent; padding: 6px 4px; font-size: 1rem; width: auto; }
+.dt-picker input#f-search:focus { outline: none; }
+.dt-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; margin: 0; padding: 4px; list-style: none;
+  max-height: 280px; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+.dt-list li { display: flex; align-items: baseline; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
+.dt-list li strong { min-width: 72px; }
+.dt-list li .nm { flex: 1; min-width: 0; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-list li .tag { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+.dt-list li[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+.dt-list li.group { cursor: default; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 700; padding: 8px 10px 2px; }
+.dt-list li.note { cursor: default; color: var(--muted); font-size: 0.8rem; }
+.dt-quick { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dt-mini { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-size: 0.8rem; font-weight: 600; color: var(--text-2); }
+.dt-note { color: var(--hold); font-weight: 600; }
+.dt-mini:hover { border-color: var(--accent); color: var(--accent); }
 .dt-setups { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .dt-setup { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
 .dt-controls label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text-2); font-size: 0.9rem; font-weight: 500; }
@@ -59,6 +97,7 @@
 .dt-pill.pos { background: var(--buy-bg); color: var(--buy); }
 .dt-pill.wait { background: var(--hold-bg); color: var(--hold); }
 .dt-pill.err { background: var(--sell-bg); color: var(--sell); }
+.dt-date { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
 .dt-about { margin-top: 28px; padding: 0; }
 .dt-guide { margin: 8px 2px 0; font-size: 0.84rem; color: var(--text-2); }
 .dt-guide summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 4px 0; }
@@ -66,6 +105,9 @@
 .dt-guide dt { font-weight: 700; color: var(--text); }
 .dt-guide dd { margin: 0; line-height: 1.45; }
 
+@media (max-width: 960px) {
+  .dt-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 720px) {
   .dt-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-setups { grid-template-columns: minmax(0, 1fr); }

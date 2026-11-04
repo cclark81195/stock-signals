@@ -45,10 +45,27 @@
         <input id="f-slip" type="number" min="0" max="30" step="0.5" value="2" inputmode="decimal" aria-describedby="h-slip" />
         <span class="help" id="h-slip">The cost of imperfect fills, charged on every buy and sell. 1 bp is 0.01%, so 2 bps is about 2 cents on a $100 stock. Use more for thinly traded stocks. Range 0 to 30.</span>
       </label>
-      <label class="wide">Symbols (comma separated, max 10)
-        <input id="f-symbols" type="text" value="SPY,QQQ,IWM,DIA,AAPL,MSFT,NVDA,TSLA" spellcheck="false" aria-describedby="h-symbols" />
-        <span class="help" id="h-symbols">The stocks and ETFs to test. Stick to very heavily traded ones, because tight bid-ask spreads are what keep small edges alive. SPY, QQQ, IWM and DIA are index ETFs.</span>
+      <label>Crypto slippage (bps/side)
+        <input id="f-cslip" type="number" min="0" max="100" step="1" value="10" inputmode="decimal" aria-describedby="h-cslip" />
+        <span class="help" id="h-cslip">The same cost, for crypto only. Crypto trading costs are usually much higher than for stocks, so check what your platform really charges and set this to match. Range 0 to 100.</span>
       </label>
+
+      <div class="wide dt-field">
+        <label for="f-search" class="dt-field-label">Symbols <span class="dt-count" id="f-count">(0 of 10)</span></label>
+        <div class="dt-picker" id="picker">
+          <div class="dt-chips" id="chips"></div>
+          <input id="f-search" type="text" role="combobox" aria-expanded="false" aria-controls="f-list" aria-autocomplete="list"
+            placeholder="Search S&amp;P 500 stocks, SPY or crypto..." autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="h-symbols" />
+          <ul class="dt-list" id="f-list" role="listbox" aria-label="Matching symbols" hidden></ul>
+        </div>
+        <div class="dt-quick">
+          <button type="button" id="q-crypto" class="dt-mini">+ Top 5 crypto</button>
+          <button type="button" id="q-clear" class="dt-mini">Clear all</button>
+          <span class="help" id="f-loaded"></span>
+          <span class="help dt-note" id="f-note" role="status"></span>
+        </div>
+        <span class="help" id="h-symbols">Pick up to 10. Every S&amp;P 500 stock is available, plus SPY (the S&amp;P 500 index fund) and the five biggest cryptocurrencies other than stablecoins: Bitcoin, Ethereum, BNB, XRP and Solana. Very heavily traded names work best, because tight bid-ask spreads are what keep small edges alive.</span>
+      </div>
       <div class="dt-setups" role="group" aria-label="Setups">
         <div class="dt-setup">
           <label class="check"><input type="checkbox" id="f-orb" checked aria-describedby="h-orb" /> Opening-range breakout</label>
@@ -91,7 +108,7 @@
               <th class="num" title="Planned buy price, including slippage">Entry</th>
               <th class="num" title="Exit price if the trade goes wrong">Stop</th>
               <th class="num" title="Exit price to take profit">Target</th>
-              <th class="num" title="Number of shares, sized so a stop-out loses about your chosen risk">Shares</th>
+              <th class="num" title="Number of shares (or units of crypto), sized so a stop-out loses about your chosen risk">Shares</th>
             </tr></thead>
             <tbody id="dt-scan"></tbody>
           </table>
@@ -105,7 +122,7 @@
             <dt>Entry</dt><dd>The planned buy price, after slippage. A signal is read when a bar closes, and the buy happens at the next bar's open, so the real price can differ a little.</dd>
             <dt>Stop</dt><dd>The price where the trade is closed at a loss. Placed before entering, so the most you can lose is known in advance.</dd>
             <dt>Target</dt><dd>The price where the trade is closed at a profit: the entry plus your chosen multiple of the risk.</dd>
-            <dt>Shares</dt><dd>How many shares the plan buys. It is your risk amount divided by the distance from Entry to Stop, capped so the position never exceeds your account size.</dd>
+            <dt>Shares</dt><dd>How many shares the plan buys, or how many units for crypto, which can be a fraction such as 0.0123. It is your risk amount divided by the distance from Entry to Stop, capped so the position never exceeds your account size.</dd>
           </dl>
         </details>
       </section>
@@ -137,6 +154,23 @@
             <dt>Max drawdown</dt><dd>The largest fall from a high point in the running total. It shows how deep a bad stretch got, so ask whether you could stick with the plan through it.</dd>
           </dl>
         </details>
+      </section>
+
+      <section aria-label="By asset class" id="dt-class-section" hidden>
+        <h2>Stocks vs crypto</h2>
+        <p class="hint">Stocks and crypto behave very differently, so their results are kept apart here. The summary at the top mixes them.</p>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th title="Stocks (and SPY) or crypto">Group</th>
+              <th class="num" title="Number of simulated trades">Trades</th>
+              <th class="num" title="Share of trades that made money after costs">Win %</th>
+              <th class="num" title="Average result per trade after costs, in R">Net R / trade</th>
+              <th class="num" title="Sum of all trades after costs, in R">Total R</th>
+            </tr></thead>
+            <tbody id="dt-byclass"></tbody>
+          </table>
+        </div>
       </section>
 
       <section aria-label="By setup">
@@ -184,7 +218,7 @@
             <dt>When (ET)</dt><dd>The day and time the trade was entered, in New York time.</dd>
             <dt>Entry / Exit</dt><dd>The price per share paid and received. Both include slippage where it applies, so they are slightly worse than the raw market price.</dd>
             <dt>Exit reason</dt>
-            <dd><strong>Target:</strong> price reached the profit target. <strong>Stop:</strong> price hit the stop. <strong>Gap through stop:</strong> price opened below the stop, so the exit was at the open and the loss is larger than planned. <strong>3:45 flatten:</strong> still open at the end-of-day cutoff, so it was closed. <strong>Session end:</strong> the data ended before the cutoff, such as on a half day.</dd>
+            <dd><strong>Target:</strong> price reached the profit target. <strong>Stop:</strong> price hit the stop. <strong>Gap through stop:</strong> price opened below the stop, so the exit was at the open and the loss is larger than planned. <strong>End-of-day close:</strong> still open at the cutoff (3:45 PM ET for stocks, 23:45 UTC for crypto), so it was closed. <strong>Session end:</strong> the data ended before the cutoff, such as on a half day.</dd>
             <dt>Result</dt><dd>The outcome after costs in R. +2R is twice the amount risked; &minus;1R is a full loss of the amount risked. It can be a bit below &minus;1R after slippage or a gap.</dd>
             <dt>P&amp;L</dt><dd>The same outcome in dollars for the shares traded, after costs.</dd>
           </dl>
@@ -199,6 +233,7 @@
       <p><strong>Exits.</strong> A profit target at the chosen multiple of risk, the stop, or a flat-by time of 3:45 PM ET, whichever comes first. If one bar touches both stop and target, the test assumes the stop hit first.</p>
       <p><strong>Risk rules (the same ones a live bot would run).</strong> Each trade risks a fixed percentage of the account. The system stops for the day after 3 trades, after losing 2R, or after 2 losses in a row. Stops that are tighter than normal 5-minute noise, or wider than 1% of price, are skipped. No leverage by default.</p>
       <p><strong>Costs.</strong> Slippage is charged on every entry and stop or time exit. The gap between "before costs" and "after costs" shows how much of any edge trading costs would eat.</p>
+      <p><strong>Crypto (experimental).</strong> Crypto trades around the clock, so each day is a UTC day: VWAP and the opening range restart at 00:00 UTC. The opening range is the first hour, breakouts are only taken before 06:00 UTC, VWAP reclaims start at 01:00 UTC, and everything is closed by 23:45 UTC. Crypto trades on weekends, can be bought in fractions, and uses its own slippage setting. These are the stock rules re-timed, not separately tuned, and I have not checked how the data feed behaves for crypto, so treat those results as a first look only. The Robinhood connection planned for this project is described as covering stocks, so automating crypto would need a different route.</p>
       <p><strong>Limits of this test.</strong> Yahoo only provides about 60 days of 5-minute data, which is a few dozen trades per symbol. That is enough to catch bugs, not enough to prove an edge. Each symbol is tested on its own, so portfolio-wide limits are only approximated. Long only. Earnings days and FOMC/CPI days are not filtered out yet.</p>
     </details>
   </main>
