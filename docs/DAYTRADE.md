@@ -69,6 +69,12 @@ Treat crypto as experimental: the rules are the stock rules re-timed and have no
 
 Each setup's results are listed separately in "By setup", so you can compare them. The thresholds were chosen from the shape of the patterns, not tuned on data. Judge each by "per trade, after costs" across many symbols; with about 60 days of data a single pattern produces few trades, so a good-looking result is as likely to be luck as an edge.
 
+## S&P 500 scan
+
+The "S&P 500 scan" section of `/daytrade.html` runs the current settings on every S&P 500 stock (the symbols picked at the top are not used). The page sends the list in batches of 10 to `/api/daytrade?scan=1`, two batches at a time, and each batch returns small addable totals per stock (`lib/daytrade/backtest.js: compactStats`) for all tested days and for the older and newer half of them. The page combines them into whole-index, sector and per-stock tables, with sorting, a minimum-trades filter, "Retry failed" and a CSV download.
+
+How to read it: the whole-index and sector rows are the test; the ranked stock list is not a shopping list. With about 500 stocks and about 60 days of data, the top of the list is mostly luck (on random, edge-free test data the best stocks still show a clearly positive result). Prefer results where the older and newer halves agree, and change one setting at a time between scans.
+
 ## Known limits
 
 - Each symbol is backtested independently; the live guard is portfolio-wide, so the real bot will trade less than the backtest implies.

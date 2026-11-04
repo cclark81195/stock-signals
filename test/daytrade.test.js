@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { makeConfig } from "../lib/daytrade/config.js";
 import { toSessions, noiseBefore, relVolAt } from "../lib/daytrade/sessions.js";
 import { buildPlan, RiskGuard, checkOrder } from "../lib/daytrade/risk.js";
-import { backtestSymbol, runSession, scanLatest, summarize } from "../lib/daytrade/backtest.js";
+import { backtestSymbol, runSession, scanLatest, summarize, compactStats } from "../lib/daytrade/backtest.js";
 import { decide, execute } from "../lib/daytrade/executor.js";
 import { DryRunBroker, RobinhoodMcpBroker } from "../lib/daytrade/broker.js";
 import { configFor, isCrypto, profileFor, CRYPTO } from "../lib/daytrade/markets.js";
@@ -389,4 +389,17 @@ test("relative volume only uses bars up to the current one", () => {
 test("in-play filter blocks a setup when early volume is ordinary", () => {
   assert.equal(run2(flagDay(1), patCfg({ filters: { inPlay: true, minRelVol: 1.2 } })).length, 1); // 1.5x
   assert.equal(run2(flagDay(1), patCfg({ filters: { inPlay: true, minRelVol: 2 } })).length, 0);
+});
+
+test("compactStats are exact, addable totals that agree with summarize", () => {
+  const trades = [...run2(flagDay(1), patCfg()), ...run2(triDay(1), patCfg())];
+  assert.equal(trades.length, 2);
+  const [a, b] = [compactStats([trades[0]]), compactStats([trades[1]])];
+  const both = compactStats(trades);
+  const full = summarize(trades);
+  assert.equal(both.trades, a.trades + b.trades);
+  assert.ok(Math.abs(both.sumNetR - (a.sumNetR + b.sumNetR)) < 0.01);
+  assert.ok(Math.abs(both.sumNetR / both.trades - full.expectancyNetR) < 0.001);
+  assert.ok(Math.abs(both.pnl - full.totalPnl) < 0.01);
+  assert.equal(both.wins / both.trades, full.winRate);
 });
