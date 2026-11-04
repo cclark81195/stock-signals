@@ -14,8 +14,8 @@ const STRATEGY_NAMES = { meanrev: "Buy sharp dips", breakout: "Buy new highs" };
 const EXIT_NAMES = { signal: "Exit signal", stop: "Stop", "stop-gap": "Gap through stop", time: "Time limit", "data-end": "Still open at the end" };
 
 const STORE_KEY = "swing-lab-settings";
-const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
-const CHECKS = { trend: "s-trend", mkt: "s-mkt" };
+const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", borrow: "s-borrow", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
+const CHECKS = { trend: "s-trend", mkt: "s-mkt", bbShort: "s-bbshort" };
 const SW_BATCH = 25, SW_PARALLEL = 2;
 
 const sw = { stocks: [], rows: new Map(), dailyPnl: {}, bench: null, benchErr: false, failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, dollars: 100 };
@@ -39,13 +39,13 @@ function params(s) {
   const set = (k, v) => { if (v !== "" && v != null) p.set(k, v); };
   set("dollars", s.dollars); set("slipBps", s.slipBps); set("stopAtr", s.stopAtr);
   if (s.strategy === "meanrev") { set("rsiBuy", s.rsiBuy); set("exitSma", s.exitSma); set("hold", s.hold); }
-  else if (s.strategy === "bollinger") { set("bbLen", s.bbLen); set("bbK", s.bbK); set("bbEntry", s.bbEntry); set("bbExit", s.bbExit); set("hold", s.bbHold); }
+  else if (s.strategy === "bollinger") { set("bbLen", s.bbLen); set("bbK", s.bbK); set("bbEntry", s.bbEntry); set("bbExit", s.bbExit); set("hold", s.bbHold); if (s.bbShort) { set("bbShort", "1"); set("borrow", s.borrow); } }
   else { set("entryLen", s.entryLen); set("exitLen", s.exitLen); set("hold", s.hold2); }
   return p;
 }
 function showStrategy() {
   const v = $("s-strategy").value;
-  $("sw-mr").hidden = v !== "meanrev"; $("sw-bo").hidden = v !== "breakout"; $("sw-bb").hidden = v !== "bollinger";
+  $("sw-mr").hidden = v !== "meanrev"; $("sw-bo").hidden = v !== "breakout"; $("sw-bb").hidden = v !== "bollinger"; $("sw-bbs").hidden = v !== "bollinger";
 }
 
 // ---------------------------------------------------------------- merging the per-stock totals
@@ -58,12 +58,13 @@ const exp = (c) => (c && c.trades ? c.sumNetR / c.trades : null);
 const pf = (c) => (c && c.sumLossR > 0 ? c.sumWinR / c.sumLossR : null);
 
 function detail(rows) {
-  const d = { stopPctSum: 0, holdBarsSum: 0, days: 0, holdPctSum: 0, byExit: {}, byYear: {} };
+  const d = { stopPctSum: 0, holdBarsSum: 0, days: 0, holdPctSum: 0, byExit: {}, byYear: {}, bySide: {} };
   for (const r of rows) {
     const a = r.all;
     if (!a || !a.byExit) continue;
     d.stopPctSum += a.stopPctSum; d.holdBarsSum += a.holdBarsSum; d.days += r.days; d.holdPctSum += r.holdPct;
     for (const [k, v] of Object.entries(a.byExit)) { const e = (d.byExit[k] ||= { trades: 0, sumNetR: 0 }); e.trades += v.trades; e.sumNetR += v.sumNetR; }
+    for (const [k, v] of Object.entries(a.bySide || {})) { const g = (d.bySide[k] ||= { trades: 0, wins: 0, sumNetR: 0, sumGrossR: 0, pnl: 0, borrow: 0 }); for (const f of Object.keys(g)) g[f] += v[f]; }
     for (const [k, v] of Object.entries(a.byYear)) { const y = (d.byYear[k] ||= { trades: 0, wins: 0, sumNetR: 0, pnl: 0 }); for (const f of Object.keys(y)) y[f] += v[f]; }
   }
   return d;
@@ -116,6 +117,11 @@ function renderDiag(rows, all) {
       <td class="num ${cls(v?.sumNetR)}">${v ? sgn(v.sumNetR / v.trades) + "R" : "-"}</td><td class="num ${cls(v?.pnl)}">${v ? money(v.pnl) : "-"}</td>
       <td class="num ${cls(r?.strat)}">${r ? pctFmt(r.strat) : "-"}</td><td class="num ${cls(r?.spy)}">${r ? pctFmt(r.spy) : "-"}</td></tr>`;
   }).join("");
+  $("sw-sidesbox").hidden = !d.bySide.short;
+  $("sw-sides").innerHTML = d.bySide.short ? ["long", "short"].filter((k) => d.bySide[k]).map((k) => { const g = d.bySide[k];
+    const gn = g.sumNetR / g.trades, gg = g.sumGrossR / g.trades;
+    return `<tr><td>${k === "long" ? "Long (buy)" : "Short (sell, then buy back)"}</td><td class="num">${g.trades}</td><td class="num">${pct0(g.wins / g.trades)}</td>
+      <td class="num ${cls(gg)}">${sgn(gg)}R</td><td class="num ${cls(gn)}">${sgn(gn)}R</td><td class="num">${k === "short" ? money(g.borrow) : "-"}</td><td class="num ${cls(g.pnl)}">${money(g.pnl)}</td></tr>`; }).join("") : "";
   const exits = Object.entries(d.byExit).sort((a, b) => b[1].trades - a[1].trades);
   $("sw-exits").innerHTML = exits.map(([k, e]) => `<tr><td>${esc(EXIT_NAMES[k] || k)}</td><td class="num">${e.trades}</td><td class="num">${pct0(e.trades / n)}</td><td class="num ${cls(e.sumNetR)}">${sgn(e.sumNetR / e.trades)}R</td></tr>`).join("");
 }
@@ -267,7 +273,7 @@ function renderStocks() {
 function renderTrades(trades) {
   const shown = [...trades].sort((a, b) => b.exitTime - a.exitTime).slice(0, 300);
   $("sw-trades-count").textContent = `(newest ${shown.length} of ${trades.length.toLocaleString("en-US")})`;
-  $("sw-trades").innerHTML = shown.map((t) => `<tr><td>${esc(t.date)}</td><td>${esc(t.exitDate)}</td><td><strong>${esc(t.symbol)}</strong></td>
+  $("sw-trades").innerHTML = shown.map((t) => `<tr><td>${esc(t.date)}</td><td>${esc(t.exitDate)}</td><td><strong>${esc(t.symbol)}</strong>${t.side === "short" ? ` <span class="dt-pill err">short</span>` : ""}</td>
       <td class="num">${price(t.entry)}</td><td class="num">${price(t.exit)}</td><td class="num">${qty(t.shares)}</td><td class="num">${t.holdBars}</td>
       <td>${esc(EXIT_NAMES[t.exitReason] || t.exitReason)}</td><td class="num ${cls(t.netR)}">${sgn(t.netR)}R</td><td class="num ${cls(t.pnl)}">${money(t.pnl)}</td></tr>`).join("");
   const pnl = shown.reduce((s, t) => s + t.pnl, 0), r = shown.reduce((s, t) => s + t.netR, 0);
@@ -339,7 +345,7 @@ function settingsNote(s) {
   const strat = s.strategy === "meanrev"
     ? `buy dips (2-day RSI under ${s.rsiBuy}, sell above the ${s.exitSma}-day average, ${Number(s.hold) > 0 ? `${s.hold}-day limit` : "no time limit"})`
     : s.strategy === "bollinger"
-    ? `Bollinger band (${s.bbLen}-day average, ${s.bbK} deviations; buy ${s.bbEntry === "reclaim" ? "when it closes back above the lower band" : "below the lower band"}, sell at ${bbExit}, ${Number(s.bbHold) > 0 ? `${s.bbHold}-day limit` : "no time limit"})`
+    ? `Bollinger band (${s.bbLen}-day average, ${s.bbK} deviations; buy ${s.bbEntry === "reclaim" ? "when it closes back above the lower band" : "below the lower band"}, sell at ${bbExit}, ${Number(s.bbHold) > 0 ? `${s.bbHold}-day limit` : "no time limit"}${s.bbShort ? `; also shorts above the upper band, ${s.borrow}% a year to borrow` : ""})`
     : `buy ${s.entryLen}-day highs, sell below the ${s.exitLen}-day low${Number(s.hold2) > 0 ? `, ${s.hold2}-day limit` : ""}`;
   return `Settings used: ${strat}; ${s.stopAtr}-ATR stop; ${s.trend ? "uptrend only" : "any trend"}${s.mkt ? ", market up" : ""}; ${s.slipBps} bps slippage; $${s.dollars} per buy; ${s.years} years.`;
 }

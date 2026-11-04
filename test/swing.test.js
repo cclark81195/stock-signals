@@ -239,3 +239,101 @@ test("bollinger: the trend filter blocks it in a downtrend", () => {
   assert.equal(backtestDaily("X", mk(closes), bbCfg({ trendFilter: true })).trades.length, 0);
   assert.ok(backtestDaily("X", mk(closes), bbCfg({ trendFilter: false })).trades.length >= 1);
 });
+
+// ---- shorting (Bollinger only) ----
+const shortCfg = (o = {}) => bbCfg({ ...o, bollinger: { allowShort: true, ...(o.bollinger || {}) } });
+const spikeDay = (extra = [105, 103, 101, 99.5, 99, 99, 99]) => [...wobble(260), ...extra];
+
+test("shorting is off by default: a spike above the upper band does nothing", () => {
+  assert.equal(backtestDaily("X", mk(spikeDay()), bbCfg()).trades.length, 0);
+});
+
+test("short: sells at the NEXT open (slippage makes the sale a little cheaper), buys back at the average, and profits from the fall", () => {
+  const bars = mk(spikeDay());
+  const t = backtestDaily("X", bars, shortCfg({ slippageBps: 10 })).trades[0];
+  assert.equal(t.side, "short");
+  assert.equal(t.date, bars[261].date);                              // signal at day 260's close, sold short at day 261's open
+  assert.ok(Math.abs(t.entry - bars[261].o * 0.999) < 0.01);         // sold 10 bps worse than the open
+  assert.ok(t.stop > t.entry);                                       // the stop sits ABOVE a short
+  assert.equal(t.exitReason, "signal");
+  assert.ok(t.exit < t.entry && t.pnl > 0 && t.netR > 0 && t.netR < t.grossR);
+  assert.ok(t.exit > bars[t.holdBars + 260].o * 0.99);              // covering costs a little extra, not less
+});
+
+test("short: a rally through the stop exits at the stop for about -1R; a gap above it is worse than -1R", () => {
+  const rally = [105, 106, 107, 108, 109, 110, 115, 120];
+  const t = backtestDaily("X", mk(spikeDay(rally)), shortCfg()).trades[0];
+  assert.ok(["stop", "stop-gap"].includes(t.exitReason) && t.netR < 0);
+  const climb = mk(spikeDay([105, 106, 108, 109, 110]), { 263: { l: 105, h: 140, c: 109 } });
+  const s = backtestDaily("X", climb, shortCfg()).trades[0];
+  assert.equal(s.exitReason, "stop");
+  assert.ok(Math.abs(s.exit - s.stop) < 0.01 && s.netR < 0 && s.netR > -1.05);
+  const gapped = mk(spikeDay([105, 106, 108, 109, 110]), { 263: { o: 140, h: 142, l: 138, c: 139 } });
+  const g = backtestDaily("X", gapped, shortCfg()).trades[0];
+  assert.equal(g.exitReason, "stop-gap");
+  assert.ok(g.exit > g.stop && g.netR < -1);
+});
+
+test("short: the borrow fee is charged per calendar day, reduces P&L and R, and longs never pay it", () => {
+  const closes = spikeDay([105, 105, 105, 105, 105, 105, 105, 105]);
+  const free = backtestDaily("X", mk(closes), shortCfg({ borrowPct: 0, bollinger: { maxHold: 6 } })).trades[0];
+  const paid = backtestDaily("X", mk(closes), shortCfg({ borrowPct: 36.5, bollinger: { maxHold: 6 } })).trades[0];
+  assert.equal(free.borrow, 0);
+  assert.ok(paid.borrow > 0);
+  assert.ok(Math.abs(free.pnl - paid.pnl - paid.borrow) < 0.01);      // the fee is exactly the difference
+  assert.ok(Math.abs(paid.borrow - paid.shares * paid.entry * 0.365 * (paid.holdBars - 1) / 365) < 0.05); // 36.5% a year, one day per day held here (test days are consecutive)
+  assert.ok(paid.netR < free.netR);
+  const long = backtestDaily("X", mk([...wobble(260), 95, 97, 99, 100.5, 101, 101]), shortCfg({ borrowPct: 36.5 })).trades[0];
+  assert.equal(long.side, "long"); assert.equal(long.borrow, 0);
+});
+
+test("short: day-by-day P&L adds up exactly to the trade P&L, with slippage and borrow fees", () => {
+  const closes = [...spikeDay([105, 106, 104, 103, 101, 99.5, 99]), ...wobble(5), 95, 97, 99, 100.5, 101, 101];
+  const { trades, daily } = backtestDaily("X", mk(closes), shortCfg({ slippageBps: 10, borrowPct: 8 }));
+  assert.ok(trades.some((t) => t.side === "short") && trades.some((t) => t.side === "long"));
+  const a = trades.reduce((s, t) => s + t.pnl, 0), b = Object.values(daily).reduce((s, v) => s + v, 0);
+  assert.ok(Math.abs(a - b) < 0.01, `${a} vs ${b}`);
+});
+
+test("short safeguards mirror the long ones: downtrend only, and only while the market is down", () => {
+  // after a long, steady rise a spike above the band happens ABOVE the 200-day average: with the trend filter on, no short
+  const up = Array.from({ length: 260 }, (_, i) => 100 + 0.3 * i + 0.6 * Math.sin(i * 0.9));
+  const topped = [...up, up[259] + 8, up[259] + 7, up[259] + 4, up[259]];
+  assert.equal(backtestDaily("X", mk(topped), shortCfg({ trendFilter: true })).trades.length, 0);
+  assert.ok(backtestDaily("X", mk(topped), shortCfg({ trendFilter: false })).trades.length >= 1);
+  // in a downtrend the same spike is allowed
+  const down = Array.from({ length: 260 }, (_, i) => 200 - 0.3 * i + 0.6 * Math.sin(i * 0.9));
+  const bounce = [...down, down[259] + 8, down[259] + 7, down[259] + 4, down[259]];
+  assert.ok(backtestDaily("X", mk(bounce), shortCfg({ trendFilter: true })).trades.some((t) => t.side === "short"));
+  // market filter: no shorts while the market is up, shorts allowed while it is down
+  const bars = mk(bounce);
+  const marketUp = new Map(bars.map((b) => [b.date, true])), marketDown = new Map(bars.map((b) => [b.date, false]));
+  assert.equal(backtestDaily("X", bars, shortCfg({ trendFilter: true, marketFilter: true }), marketUp).trades.length, 0);
+  assert.ok(backtestDaily("X", bars, shortCfg({ trendFilter: true, marketFilter: true }), marketDown).trades.length >= 1);
+});
+
+test("short: the cautious entry waits for a close back below the upper band; exits run mid < half < lower band", () => {
+  const closes = [...wobble(260), 108, 109, 105, 100, 98, 96, 94, 92, 90, 88, 88, 88];
+  const bars = mk(closes);
+  const plain = backtestDaily("X", bars, shortCfg()).trades[0];
+  const cautious = backtestDaily("X", bars, shortCfg({ bollinger: { entry: "reclaim" } })).trades[0];
+  assert.ok(plain && cautious && cautious.date > plain.date && cautious.entry < plain.entry);   // later, and sold lower
+  const h = (f) => backtestDaily("X", bars, shortCfg({ bollinger: { exitFrac: f } })).trades[0].holdBars;
+  assert.ok(h(0) <= h(0.5) && h(0.5) <= h(1) && h(0) < h(1), `${h(0)}/${h(0.5)}/${h(1)}`);
+});
+
+test("turning shorting on never changes the long trades", () => {
+  const closes = [...wobble(260), 95, 97, 99, 100.5, 101, 101, 101, 101];
+  const off = backtestDaily("X", mk(closes), bbCfg()).trades;
+  const on = backtestDaily("X", mk(closes), shortCfg()).trades.filter((t) => t.side === "long");
+  assert.deepEqual(on, off.map((t) => ({ ...t })));
+});
+
+test("swingStats splits longs and shorts, and borrow fees add up", () => {
+  const closes = [...spikeDay([105, 103, 101, 99.5, 99, 99, 99]), ...wobble(6), 95, 97, 99, 100.5, 101, 101];
+  const trades = backtestDaily("X", mk(closes), shortCfg({ borrowPct: 12 })).trades;
+  const c = swingStats(trades);
+  assert.equal(c.bySide.long.trades + c.bySide.short.trades, trades.length);
+  assert.ok(Math.abs(c.bySide.short.borrow - trades.filter((t) => t.side === "short").reduce((s, t) => s + t.borrow, 0)) < 0.01);
+  assert.ok(Math.abs(c.bySide.long.pnl + c.bySide.short.pnl - trades.reduce((s, t) => s + t.pnl, 0)) < 0.01);
+});
