@@ -83,10 +83,10 @@
 .dt-chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 14px 8px; }
 .dt-chart-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; }
 .dt-chart-title .hint { display: inline; margin-left: 6px; font-weight: 400; }
-#dt-curve svg { display: block; width: 100%; height: auto; }
-#dt-curve .zero { stroke: var(--border); stroke-dasharray: 4 4; }
-#dt-curve .line { fill: none; stroke: var(--series-price); stroke-width: 2; stroke-linejoin: round; }
-#dt-curve .lbl { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+#dt-curve svg, #sp-curve svg { display: block; width: 100%; height: auto; }
+#dt-curve .zero, #sp-curve .zero { stroke: var(--border); stroke-dasharray: 4 4; }
+#dt-curve .line, #sp-curve .line { fill: none; stroke: var(--series-price); stroke-width: 2; stroke-linejoin: round; }
+#dt-curve .lbl, #sp-curve .lbl { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .dt-empty { color: var(--muted); text-align: center; padding: 28px 0; font-size: 0.9rem; }
 
 /* ---- tables ---- */
@@ -156,20 +156,25 @@ body.dt-explain .dt-ex { display: block; }
 .dt-balspacer { flex: 1 1 auto; }
 .dt-balbar .dt-mini[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .dt-balbar .dt-mini:disabled { opacity: 0.45; cursor: not-allowed; }
-#dt-bal svg { display: block; width: 100%; height: auto; }
-#dt-bal .grid { stroke: var(--grid); }
-#dt-bal .start { stroke: var(--muted); stroke-dasharray: 4 4; }
-#dt-bal .day { stroke: var(--border); stroke-dasharray: 2 4; }
-#dt-bal .line { fill: none; stroke: var(--series-price); stroke-width: 2; stroke-linejoin: round; }
-#dt-bal .lbl { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-#dt-bal .mk { cursor: pointer; stroke: var(--surface); stroke-width: 1; }
-#dt-bal .mk.buy { fill: var(--accent); }
-#dt-bal .mk.sell.win { fill: var(--buy); }
-#dt-bal .mk.sell.loss { fill: var(--sell); }
-#dt-bal .mk:focus-visible, #dt-bal .mk.sel { stroke: var(--text); stroke-width: 2; outline: none; }
+.bal-svg svg { display: block; width: 100%; height: auto; }
+.bal-svg .grid { stroke: var(--grid); }
+.bal-svg .start { stroke: var(--muted); stroke-dasharray: 4 4; }
+.bal-svg .day { stroke: var(--border); stroke-dasharray: 2 4; }
+.bal-svg .line { fill: none; stroke: var(--series-price); stroke-width: 2; stroke-linejoin: round; }
+.bal-svg .lbl { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.bal-svg .mk { cursor: pointer; stroke: var(--surface); stroke-width: 1; }
+.bal-svg .mk.buy { fill: var(--accent); }
+.bal-svg .mk.sell.win { fill: var(--buy); }
+.bal-svg .mk.sell.loss { fill: var(--sell); }
+.bal-svg .mk:focus-visible, .bal-svg .mk.sel { stroke: var(--text); stroke-width: 2; outline: none; }
 .dt-ballegend { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; margin: 6px 0 0; font-size: 0.78rem; color: var(--text-2); }
 .dt-ballegend .lg { display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px; border-left: 5px solid transparent; border-right: 5px solid transparent; }
 .dt-ballegend .lg.buy { border-bottom: 9px solid var(--accent); }
 .dt-ballegend .lg.sell { border-top: 9px solid var(--buy); }
 .dt-ballegend .lg.sell.loss { border-top-color: var(--sell); }
 .dt-baldetail { margin: 6px 0 4px; min-height: 1.4em; }
+
+.dt-sp-chartpick { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 0.84rem; color: var(--text-2); }
+.dt-sp-chartpick select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); max-width: 100%; }
+.dt-linkbtn { font: inherit; font-weight: 700; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; }
+#sp-balcard { margin-top: 12px; }
