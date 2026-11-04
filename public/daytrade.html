@@ -38,11 +38,15 @@
     <form class="dt-controls" id="dt-form" autocomplete="off">
       <label>Account size ($)
         <input id="f-equity" type="number" min="500" step="500" value="10000" inputmode="numeric" aria-describedby="h-equity" />
-        <span class="help dt-ex" id="h-equity">The money the bot is allowed to trade. It decides how many shares each trade can use. Use the amount you would put in a separate trading account.</span>
+        <span class="help dt-ex" id="h-equity">The money the bot is allowed to trade. It caps how large any one trade can be. Use the amount you would put in a separate trading account.</span>
+      </label>
+      <label>Dollars per buy ($)
+        <input id="f-dollars" type="number" min="1" step="1" placeholder="Auto (by risk)" inputmode="decimal" aria-describedby="h-dollars" />
+        <span class="help dt-ex" id="h-dollars">Spend this fixed amount on every buy, using fractional shares, so $25 buys 0.12 of a $200 stock. Leave it blank to size each trade by the risk setting instead. When it is filled in, the risk percentage is ignored and a stopped-out trade loses less or more than that depending on how far away the stop is. It is capped by your account size.</span>
       </label>
       <label>Risk per trade (%)
         <input id="f-risk" type="number" min="0.05" max="2" step="0.05" value="0.5" inputmode="decimal" aria-describedby="h-risk" />
-        <span class="help dt-ex" id="h-risk">The most you lose if a trade hits its stop, as a share of the account. 0.5% of $10,000 is $50. The further away the stop, the fewer shares it buys. Range 0.05 to 2.</span>
+        <span class="help dt-ex" id="h-risk">The most you lose if a trade hits its stop, as a share of the account. 0.5% of $10,000 is $50. The further away the stop, the fewer shares it buys. Ignored when "Dollars per buy" is filled in. Range 0.05 to 2.</span>
       </label>
       <label>Profit target (R)
         <input id="f-target" type="number" min="0.5" max="5" step="0.5" value="2" inputmode="decimal" aria-describedby="h-target" />
@@ -141,7 +145,7 @@
               <th class="num" title="Planned buy price, including slippage">Entry</th>
               <th class="num" title="Exit price if the trade goes wrong">Stop</th>
               <th class="num" title="Exit price to take profit">Target</th>
-              <th class="num" title="Number of shares (or units of crypto), sized so a stop-out loses about your chosen risk">Shares</th>
+              <th class="num" title="Number of shares (or units of crypto): sized by your risk setting, or your fixed dollar amount divided by the price">Shares</th>
             </tr></thead>
             <tbody id="dt-scan"></tbody>
           </table>
@@ -252,7 +256,7 @@
           <dl>
             <dt>When (ET)</dt><dd>The day and time the trade was entered, in New York time.</dd>
             <dt>Buy price / Sell price</dt><dd>The price per share paid and received. Both include slippage where it applies, so they are slightly worse than the raw market price.</dd>
-            <dt>Shares</dt><dd>How many shares (or units of crypto) were bought and then sold. It is sized so that hitting the stop loses about your chosen risk.</dd>
+            <dt>Shares</dt><dd>How many shares (or units of crypto) were bought and then sold. With "Dollars per buy" filled in, it is that amount divided by the buy price; otherwise it is sized so that hitting the stop loses about your chosen risk.</dd>
             <dt>Exit reason</dt>
             <dd><strong>Target:</strong> price reached the profit target. <strong>Stop:</strong> price hit the stop. <strong>Gap through stop:</strong> price opened below the stop, so the exit was at the open and the loss is larger than planned. <strong>End-of-day close:</strong> still open at the cutoff (3:45 PM ET for stocks, 23:45 UTC for crypto), so it was closed. <strong>Session end:</strong> the data ended before the cutoff, such as on a half day.</dd>
             <dt>Result</dt><dd>The outcome after costs in R. +2R is twice the amount risked; &minus;1R is a full loss of the amount risked. It can be a bit below &minus;1R after slippage or a gap.</dd>
