@@ -658,12 +658,16 @@ function spRowView(r) {
 
 // Merge the diagnostics detail carried on each stock's "all" totals.
 function spDetail(rows) {
-  const d = { stopPctSum: 0, holdBarsSum: 0, partials: 0, byExit: {}, bySetup: {} };
+  const d = { stopPctSum: 0, holdBarsSum: 0, partials: 0, byExit: {}, bySetup: {}, byHour: {} };
   for (const r of rows) {
     const a = r.all;
     if (!a || !a.byExit) continue;
     d.stopPctSum += a.stopPctSum; d.holdBarsSum += a.holdBarsSum; d.partials += a.partials;
     for (const [k, v] of Object.entries(a.byExit)) { const e = (d.byExit[k] ||= { trades: 0, sumNetR: 0 }); e.trades += v.trades; e.sumNetR += v.sumNetR; }
+    for (const [k, v] of Object.entries(a.byHour || {})) {
+      const h = (d.byHour[k] ||= { trades: 0, wins: 0, sumNetR: 0, sumGrossR: 0, pnl: 0 });
+      for (const f of Object.keys(h)) h[f] += v[f];
+    }
     for (const [k, v] of Object.entries(a.bySetup)) {
       const g = (d.bySetup[k] ||= { trades: 0, wins: 0, sumNetR: 0, sumGrossR: 0, sumWinR: 0, sumLossR: 0, pnl: 0 });
       for (const f of Object.keys(g)) g[f] += v[f];
@@ -672,10 +676,12 @@ function spDetail(rows) {
   return d;
 }
 
+const hourLabel = (m) => { const f = (x) => `${Math.floor(x / 60)}:${String(x % 60).padStart(2, "0")}`; return `${m === 540 ? "9:30" : f(m)}–${f(m + 60)}`; };
+
 function spRenderDiagnostics(rows, all) {
   const d = spDetail(rows);
   const n = all.trades;
-  if (!n) { $("sp-diag").innerHTML = ""; $("sp-bysetup").innerHTML = ""; $("sp-byexit").innerHTML = ""; return; }
+  if (!n) { $("sp-diag").innerHTML = ""; $("sp-bysetup").innerHTML = ""; $("sp-byexit").innerHTML = ""; $("sp-byhour").innerHTML = ""; return; }
   const losses = n - all.wins;
   const avgWin = all.wins ? all.sumWinR / all.wins : null;
   const avgLoss = losses ? all.sumLossR / losses : null;
@@ -698,6 +704,13 @@ function spRenderDiagnostics(rows, all) {
       <td class="num">${g.wins ? "+" + (g.sumWinR / g.wins).toFixed(2) + "R" : "-"}</td><td class="num">${l ? "−" + (g.sumLossR / l).toFixed(2) + "R" : "-"}</td>
       <td class="num ${cls(gg)}">${sgn(gg)}R</td><td class="num ${cls(gn)}">${sgn(gn)}R</td>
       <td class="num">${g.sumLossR > 0 ? (g.sumWinR / g.sumLossR).toFixed(2) : "-"}</td><td class="num ${cls(g.pnl)}">${money(g.pnl)}</td></tr>`;
+  }).join("");
+
+  const hours = Object.entries(d.byHour).sort((a, b) => Number(a[0]) - Number(b[0]));
+  $("sp-byhour").innerHTML = hours.map(([k, h]) => {
+    const gn = h.sumNetR / h.trades, gg = h.sumGrossR / h.trades;
+    return `<tr><td>${hourLabel(Number(k))}</td><td class="num">${h.trades}</td><td class="num">${pct0(h.wins / h.trades)}</td>
+      <td class="num ${cls(gg)}">${sgn(gg)}R</td><td class="num ${cls(gn)}">${sgn(gn)}R</td><td class="num ${cls(h.pnl)}">${money(h.pnl)}</td></tr>`;
   }).join("");
 
   const exits = Object.entries(d.byExit).sort((a, b) => b[1].trades - a[1].trades);

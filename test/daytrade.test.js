@@ -611,3 +611,12 @@ test("compactStats detail splits the same trades by setup and by exit, and adds 
   assert.ok(c.stopPctSum > 0 && c.holdBarsSum > 0);
   assert.equal(compactStats(trades).byExit, undefined); // the light version stays light
 });
+
+test("compactStats detail buckets trades by entry hour and the buckets add up", () => {
+  const trades = [...run2(flagDay(1), patCfg()), ...run2(triDay(1), patCfg())];
+  const c = compactStats(trades, true);
+  assert.ok(trades.every((t) => Number.isFinite(t.entryMin) && t.entryMin >= 570 && t.entryMin < 960));
+  assert.equal(Object.values(c.byHour).reduce((t, h) => t + h.trades, 0), 2);
+  assert.ok(Math.abs(Object.values(c.byHour).reduce((t, h) => t + h.sumNetR, 0) - c.sumNetR) < 0.01);
+  assert.ok(Object.keys(c.byHour).every((k) => Number(k) % 60 === 0));
+});
