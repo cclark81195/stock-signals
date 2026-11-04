@@ -75,6 +75,12 @@ The "S&P 500 scan" section of `/daytrade.html` runs the current settings on ever
 
 How to read it: the whole-index and sector rows are the test; the ranked stock list is not a shopping list. With about 500 stocks and about 60 days of data, the top of the list is mostly luck (on random, edge-free test data the best stocks still show a clearly positive result). Prefer results where the older and newer halves agree, and change one setting at a time between scans.
 
+## Fixed dollars per buy
+
+"Dollars per buy" (`dollarsPerTrade`, `dollars=` in the API) makes every buy the same dollar amount, as a fractional quantity (down to 6 decimals), capped by the account size. Blank or 0 keeps the default: whole shares sized so a stop-out loses `riskPct` of the account. In fixed-dollar mode the risk percentage is ignored, so a stopped-out trade loses more or less depending on how far the stop is; R-multiples are unchanged because they are per share. `checkOrder` allows fractional stock quantities only in this mode.
+
+Not verified: how Robinhood handles fractional-share orders (whether limit orders, attached stop-losses and extended hours are supported, and its minimum order). The safety rules here require limit orders with a protective stop, so check this against the real account and the MCP's tool list before any live stage.
+
 ## Known limits
 
 - Each symbol is backtested independently; the live guard is portfolio-wide, so the real bot will trade less than the backtest implies.

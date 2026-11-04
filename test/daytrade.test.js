@@ -403,3 +403,37 @@ test("compactStats are exact, addable totals that agree with summarize", () => {
   assert.ok(Math.abs(both.pnl - full.totalPnl) < 0.01);
   assert.equal(both.wins / both.trades, full.winRate);
 });
+
+// ---------------------------------------------------------------- fixed dollars per buy
+test("fixed dollars per buy: same dollar amount every time, as fractional shares", () => {
+  const c = patCfg({ dollarsPerTrade: 50 });
+  const [t] = run2(flagDay(1), c);
+  assert.ok(t.shares > 0 && !Number.isInteger(t.shares), `shares ${t.shares}`);
+  assert.ok(Math.abs(t.shares * t.entry - 50) < 0.001, `spent ${t.shares * t.entry}`);
+  // P&L is shares x (exit - entry), so it scales with the amount spent
+  assert.ok(Math.abs(t.pnl - t.shares * (t.exit - t.entry)) < 0.01);
+  const [big] = run2(flagDay(1), patCfg({ dollarsPerTrade: 100 }));
+  assert.ok(Math.abs(big.pnl / t.pnl - 2) < 0.01);
+  assert.ok(Math.abs(big.netR - t.netR) < 1e-9); // R is per share, so it does not change
+});
+
+test("fixed dollars per buy: capped by the account, ignores the risk percentage", () => {
+  const sig = { setup: "orb", stopRef: 100 };
+  const small = buildPlan(sig, 100.8, 0.2, makeConfig({ equity: 1000, dollarsPerTrade: 5000, riskPct: 0.1 }));
+  assert.ok(small.ok);
+  assert.ok(small.plan.notional <= 1000 + 1e-6, `notional ${small.plan.notional}`);
+  const a = buildPlan(sig, 100.8, 0.2, makeConfig({ equity: 10000, dollarsPerTrade: 25, riskPct: 0.1 }));
+  const b = buildPlan(sig, 100.8, 0.2, makeConfig({ equity: 10000, dollarsPerTrade: 25, riskPct: 2 }));
+  assert.equal(a.plan.shares, b.plan.shares);
+});
+
+test("fixed dollars per buy: leaving it at 0 keeps whole-share risk sizing", () => {
+  const r = buildPlan({ setup: "orb", stopRef: 100 }, 100.8, 0.2, makeConfig({ equity: 10000, riskPct: 0.5 }));
+  assert.ok(Number.isInteger(r.plan.shares));
+});
+
+test("fixed dollars per buy: checkOrder accepts fractional stock quantities only in that mode", () => {
+  const order = { symbol: "SPY", side: "buy", qty: 0.25, type: "limit", limitPrice: 500, stopPrice: 495 };
+  assert.equal(checkOrder(order, makeConfig({ equity: 10000 })).ok, false);
+  assert.equal(checkOrder(order, makeConfig({ equity: 10000, dollarsPerTrade: 125 })).ok, true);
+});

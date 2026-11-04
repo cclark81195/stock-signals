@@ -1,5 +1,5 @@
 // GET /api/daytrade?symbols=SPY,AAPL,BTC-USD&equity=10000&riskPct=0.5&targetR=2&slipBps=2&cryptoSlipBps=10&orb=1&vwap=1
-//   &scan=1 (compact per-symbol totals for the S&P 500 scan)  &flag=1&tri=1 (pattern setups)  &exit=measured  &mkt=1 (SPY above VWAP)  &inplay=1 (unusual early volume)
+//   &dollars=50 (fixed dollars per buy; omit for risk-based sizing)  &scan=1 (compact per-symbol totals for the S&P 500 scan)  &flag=1&tri=1 (pattern setups)  &exit=measured  &mkt=1 (SPY above VWAP)  &inplay=1 (unusual early volume)
 // Day Trade Lab: latest-session setups plus a cost-aware backtest of the last ~60 days of
 // 5-minute bars (the most Yahoo provides). Stocks use the 9:30-16:00 ET session; crypto uses
 // UTC days. Research only; it places no orders. Cached at Vercel's edge for 5 minutes.
@@ -31,6 +31,7 @@ export default async function handler(req, res) {
     universe: symbols,
     equity: clamp(q.equity, 500, 10_000_000),
     riskPct: clamp(q.riskPct, 0.05, 2),
+    dollarsPerTrade: clamp(q.dollars, 1, 10_000_000),
     targetR: clamp(q.targetR, 0.5, 5),
     slippageBps: clamp(q.slipBps, 0, 30),
     exit: q.exit === "measured" ? "measured" : q.exit === "fixed" ? "fixed" : undefined,
@@ -119,7 +120,7 @@ export default async function handler(req, res) {
       generatedAt: Math.floor(Date.now() / 1000),
       warnings,
       config: {
-        equity: base.equity, riskPct: base.riskPct, targetR: base.targetR,
+        equity: base.equity, riskPct: base.riskPct, dollarsPerTrade: base.dollarsPerTrade, targetR: base.targetR,
         slippageBps: base.slippageBps, cryptoSlippageBps: cryptoSlip, exit: base.exit, filters: base.filters,
         maxTradesPerDay: base.maxTradesPerDay, maxDailyLossR: base.maxDailyLossR,
         setups: base.setups,

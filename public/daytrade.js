@@ -13,7 +13,7 @@ const EXIT_NAMES = { target: "Target", stop: "Stop", "stop-gap": "Gap through st
 
 const STORE_KEY = "daytrade-lab-settings";
 const CHECKS = { flag: "f-flag", tri: "f-tri", mkt: "f-mkt", inplay: "f-inplay" };
-const fields = { equity: "f-equity", riskPct: "f-risk", targetR: "f-target", slipBps: "f-slip", cryptoSlipBps: "f-cslip" };
+const fields = { equity: "f-equity", dollars: "f-dollars", riskPct: "f-risk", targetR: "f-target", slipBps: "f-slip", cryptoSlipBps: "f-cslip" };
 
 function loadSettings() {
   let saved = null;
@@ -65,7 +65,7 @@ function renderTiles(a, equity) {
     tile("Profit factor", a.profitFactor == null ? "-" : a.profitFactor.toFixed(2), "above 1 means wins outweigh losses", a.profitFactor == null ? "" : a.profitFactor > 1 ? "pos" : "neg",
       "Total won divided by total lost. Under 1 loses money, 1 is break-even, and about 1.5 or more is considered solid."),
     tile("Total result", `${sgn(a.totalNetR)}R`, `${money(a.totalPnl)} on ${money(equity).replace(".00", "")}`, cls(a.totalNetR),
-      "All trades added up after costs, in R and in dollars. Dollars assume the same risk on every trade, with no compounding."),
+      "All trades added up after costs, in R and in dollars. Dollars assume the same size on every trade (the same risk, or the same dollar amount if you set \"Dollars per buy\"), with no compounding."),
     tile("Worst drawdown", `−${a.maxDrawdownR.toFixed(1)}R`, "peak to trough", "",
       "The biggest fall from a high point in the running total. It shows how deep the worst stretch got. Ask whether you could stay with the plan through it."),
     tile("Hit the target", pct0(hitTarget), otherExits || "no other exits", "",
@@ -194,6 +194,7 @@ function settingsParams(s) {
   const qs = new URLSearchParams();
   if (s.equity) qs.set("equity", s.equity);
   if (s.riskPct) qs.set("riskPct", s.riskPct);
+  if (Number(s.dollars) > 0) qs.set("dollars", s.dollars);
   if (s.targetR) qs.set("targetR", s.targetR);
   if (s.slipBps !== "") qs.set("slipBps", s.slipBps);
   if (s.cryptoSlipBps !== "") qs.set("cryptoSlipBps", s.cryptoSlipBps);
@@ -532,7 +533,7 @@ function spProgress(done, total, extra = "") {
 function spSettingsNote(s) {
   const on = [s.orb && "opening-range breakout", s.vwap && "VWAP reclaim", s.flag && "bull flag", s.tri && "ascending triangle"].filter(Boolean);
   const filt = [s.mkt && "market up", s.inplay && "in play"].filter(Boolean);
-  return `Settings used: ${on.join(", ") || "no setups"}${filt.length ? `; filters: ${filt.join(", ")}` : ""}; ${s.exit === "measured" ? "measured-move" : `${s.targetR}R`} target; ${s.slipBps} bps slippage; $${Number(s.equity).toLocaleString("en-US")} account, ${s.riskPct}% risk.`;
+  return `Settings used: ${on.join(", ") || "no setups"}${filt.length ? `; filters: ${filt.join(", ")}` : ""}; ${s.exit === "measured" ? "measured-move" : `${s.targetR}R`} target; ${s.slipBps} bps slippage; $${Number(s.equity).toLocaleString("en-US")} account, ${Number(s.dollars) > 0 ? `$${s.dollars} per buy` : `${s.riskPct}% risk`}.`;
 }
 
 async function spRun(only = null) {
