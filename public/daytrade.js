@@ -36,21 +36,31 @@ function readForm() {
 const et = (ts) => new Date(ts * 1000).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 // ---------------------------------------------------------------- rendering
-function tile(label, value, sub = "", klass = "") {
-  return `<div class="dt-tile"><div class="k">${esc(label)}</div><div class="v ${klass}">${value}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</div>`;
+function tile(label, value, sub = "", klass = "", desc = "") {
+  return `<div class="dt-tile"><div class="k">${esc(label)}</div><div class="v ${klass}">${value}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}${desc ? `<div class="d">${esc(desc)}</div>` : ""}</div>`;
 }
 
 function renderTiles(a, equity) {
   if (!a.trades) { $("dt-tiles").innerHTML = ""; return; }
+  const hitTarget = (a.byExit.target || 0) / a.trades;
+  const otherExits = Object.entries(a.byExit).filter(([k]) => k !== "target").map(([k, n]) => `${n} ${(EXIT_NAMES[k] || k).toLowerCase()}`).join(", ");
   $("dt-tiles").innerHTML = [
-    tile("Trades", String(a.trades), `avg hold ${Math.round(a.avgHoldMin)} min`),
-    tile("Win rate", pct0(a.winRate), `avg win ${sgn(a.avgWinR)}R, avg loss −${a.avgLossR.toFixed(2)}R`),
-    tile("Per trade, after costs", `${sgn(a.expectancyNetR)}R`, "the number that matters", cls(a.expectancyNetR)),
-    tile("Per trade, before costs", `${sgn(a.expectancyGrossR)}R`, `costs take ${a.costDragR.toFixed(2)}R`),
-    tile("Profit factor", a.profitFactor == null ? "-" : a.profitFactor.toFixed(2), "above 1 means wins outweigh losses", a.profitFactor == null ? "" : a.profitFactor > 1 ? "pos" : "neg"),
-    tile("Total result", `${sgn(a.totalNetR)}R`, `${money(a.totalPnl)} on ${money(equity).replace(".00", "")}`, cls(a.totalNetR)),
-    tile("Worst drawdown", `−${a.maxDrawdownR.toFixed(1)}R`, "peak to trough"),
-    tile("Exits", Object.entries(a.byExit).map(([k, n]) => `${n} ${EXIT_NAMES[k] || k}`).join(", ").replace(/^(.{34}).+$/, "$1…"), "how trades ended"),
+    tile("Trades", String(a.trades), `avg hold ${Math.round(a.avgHoldMin)} min`, "",
+      "How many simulated trades the rules took across all symbols. Hundreds are needed before results mean much; a few dozen is mostly luck."),
+    tile("Win rate", pct0(a.winRate), `avg win ${sgn(a.avgWinR)}R, avg loss −${a.avgLossR.toFixed(2)}R`, "",
+      "The share of trades that made money after costs. A low win rate can still work if the wins are bigger than the losses."),
+    tile("Per trade, after costs", `${sgn(a.expectancyNetR)}R`, "the number that matters", cls(a.expectancyNetR),
+      "The average result of one trade after slippage, in R. Positive means the rules made money on average. Negative means they lost."),
+    tile("Per trade, before costs", `${sgn(a.expectancyGrossR)}R`, `costs take ${a.costDragR.toFixed(2)}R`, "",
+      "The same average if trading were free. The gap from the tile before it is what slippage eats. Small edges often vanish here."),
+    tile("Profit factor", a.profitFactor == null ? "-" : a.profitFactor.toFixed(2), "above 1 means wins outweigh losses", a.profitFactor == null ? "" : a.profitFactor > 1 ? "pos" : "neg",
+      "Total won divided by total lost. Under 1 loses money, 1 is break-even, and about 1.5 or more is considered solid."),
+    tile("Total result", `${sgn(a.totalNetR)}R`, `${money(a.totalPnl)} on ${money(equity).replace(".00", "")}`, cls(a.totalNetR),
+      "All trades added up after costs, in R and in dollars. Dollars assume the same risk on every trade, with no compounding."),
+    tile("Worst drawdown", `−${a.maxDrawdownR.toFixed(1)}R`, "peak to trough", "",
+      "The biggest fall from a high point in the running total. It shows how deep the worst stretch got. Ask whether you could stay with the plan through it."),
+    tile("Hit the target", pct0(hitTarget), otherExits || "no other exits", "",
+      "How many trades reached the profit target. The line below counts the rest: stops, gaps through the stop, and end-of-day exits."),
   ].join("");
 }
 

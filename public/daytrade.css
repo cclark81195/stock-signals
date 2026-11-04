@@ -24,19 +24,23 @@
   font-size: 1rem; color: var(--text); width: 100%; min-width: 0;
 }
 .dt-controls input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.dt-setups { grid-column: 1 / 4; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
+.help { font-size: 0.76rem; font-weight: 400; color: var(--muted); line-height: 1.4; }
+.dt-setups { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.dt-setup { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
 .dt-controls label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text-2); font-size: 0.9rem; font-weight: 500; }
 .dt-run {
-  grid-column: 4; padding: 11px 16px; border: 0; border-radius: 10px; font-weight: 700; color: #fff; background: var(--accent);
+  grid-column: 1 / -1; padding: 11px 16px; border: 0; border-radius: 10px; font-weight: 700; color: #fff; background: var(--accent);
 }
 .dt-run:disabled { opacity: 0.55; cursor: progress; }
+.dt-run-help { grid-column: 1 / -1; margin: -4px 0 0; text-align: center; }
 
 /* ---- stat tiles ---- */
 .dt-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
 .dt-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px; }
 .dt-tile .k { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
 .dt-tile .v { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; margin-top: 2px; }
-.dt-tile .s { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+.dt-tile .s { font-size: 0.76rem; color: var(--text-2); margin-top: 2px; font-weight: 600; }
+.dt-tile .d { font-size: 0.74rem; color: var(--muted); margin-top: 6px; line-height: 1.4; }
 
 .dt-chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 14px 8px; }
 .dt-chart-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; }
@@ -56,11 +60,17 @@
 .dt-pill.wait { background: var(--hold-bg); color: var(--hold); }
 .dt-pill.err { background: var(--sell-bg); color: var(--sell); }
 .dt-about { margin-top: 28px; padding: 0; }
+.dt-guide { margin: 8px 2px 0; font-size: 0.84rem; color: var(--text-2); }
+.dt-guide summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 4px 0; }
+.dt-guide dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; }
+.dt-guide dt { font-weight: 700; color: var(--text); }
+.dt-guide dd { margin: 0; line-height: 1.45; }
 
 @media (max-width: 720px) {
   .dt-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dt-setups { grid-column: 1 / -1; }
-  .dt-run { grid-column: 1 / -1; }
+  .dt-setups { grid-template-columns: minmax(0, 1fr); }
+  .dt-guide dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .dt-guide dd { margin-bottom: 8px; }
   .dt-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-tile .v { font-size: 1.25rem; }
 }
