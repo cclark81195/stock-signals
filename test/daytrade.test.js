@@ -437,3 +437,165 @@ test("fixed dollars per buy: checkOrder accepts fractional stock quantities only
   assert.equal(checkOrder(order, makeConfig({ equity: 10000 })).ok, false);
   assert.equal(checkOrder(order, makeConfig({ equity: 10000, dollarsPerTrade: 125 })).ok, true);
 });
+
+// ---------------------------------------------------------------- more setups, partial exit, midday
+const only = (name, extra = {}) => makeConfig({
+  equity: 10000, riskPct: 1, slippageBps: 0, maxRiskPct: 3,
+  setups: { orb: { enabled: false }, vwap: { enabled: false }, [name]: { enabled: true } },
+  ...extra,
+});
+
+// Pullback: a steady climb (0.1 a bar), a dip at bars 30-31 that tests the 20-bar average, then a green
+// bar 32 that closes above the 9-bar average and the last high on 2x volume. Fills at bar 33's open.
+function pullbackDay(dayIndex, over = {}) {
+  const script = {};
+  for (let k = 0; k < 30; k++) script[k] = { o: 100 + 0.1 * k, c: 100 + 0.1 * (k + 1) };
+  script[30] = { o: 103.0, c: 102.4, h: 103.0, l: 101.9 };
+  script[31] = { o: 102.4, c: 102.3, h: 102.5, l: 102.2 };
+  script[32] = { o: 102.3, c: 103.0, h: 103.1, l: 102.3, v: 2000 };
+  script[33] = { o: 103.0, c: 103.0, h: 103.1, l: 102.9 };
+  script[34] = { o: 103.0, c: 105.6, h: 105.8, l: 103.0 };
+  return makeDay(dayIndex, 100, { ...script, ...over });
+}
+
+test("pullback: buys the resumption after a dip to the 20-bar average, stop under the dip", () => {
+  const trades = run2(pullbackDay(1), only("pullback"));
+  assert.ok(trades.length >= 1, "expected a pullback trade");
+  const t = trades[0];
+  assert.equal(t.setup, "pullback");
+  assert.ok(t.stop < 102.0 && t.stop > 101.5, `stop ${t.stop}`);
+});
+
+test("pullback: a straight-up climb with no dip is not a pullback", () => {
+  const script = {};
+  for (let k = 0; k < 50; k++) script[k] = { o: 100 + 0.1 * k, c: 100 + 0.1 * (k + 1), v: k === 32 ? 2000 : 1000 };
+  assert.equal(run2(makeDay(1, 100, script), only("pullback")).length, 0);
+});
+
+// Fibonacci: a 3.2 up-move (bars 3-14), a pullback to about 50% (bars 15-19), a green confirming bar 20.
+function fibDay(dayIndex, over = {}) {
+  const script = {};
+  for (let k = 0; k < 12; k++) script[3 + k] = { o: 100 + 0.25 * k, c: 100 + 0.25 * (k + 1) };    // 100 -> 103
+  script[14] = { o: 102.75, c: 103.0, h: 103.1, l: 102.7 };
+  [102.7, 102.3, 102.0, 101.7, 101.6].forEach((c, k) => { script[15 + k] = { o: k ? [102.7, 102.3, 102.0, 101.7][k - 1] : 103.0, c, h: (k ? [102.7, 102.3, 102.0, 101.7][k - 1] : 103.0) + 0.05, l: c - 0.1 }; });
+  script[20] = { o: 101.6, c: 102.0, h: 102.1, l: 101.5, v: 2000 };
+  script[21] = { o: 102.0, c: 102.0, h: 102.1, l: 101.9 };
+  script[22] = { o: 102.0, c: 103.6, h: 103.7, l: 102.0 };
+  return makeDay(dayIndex, 100, { ...script, ...over });
+}
+
+test("fib: buys a 38-62% pullback of a clear up-move, stop under the 78.6% level", () => {
+  const [t] = run2(fibDay(1), only("fib"));
+  assert.ok(t, "expected a fib trade");
+  assert.equal(t.setup, "fib");
+  assert.ok(t.stop > 100.3 && t.stop < 100.8, `stop ${t.stop}`);
+});
+
+test("fib: a pullback that falls back below the start of the move is not a fib setup", () => {
+  const day = fibDay(1, { 18: { o: 102.0, c: 99.5, l: 99.4 }, 19: { o: 99.5, c: 99.8 } });
+  assert.equal(run2(day, only("fib")).length, 0);
+});
+
+// Double bottom: lows of 98.0 (bar 10) and 98.1 (bar 22) with a rally to 100.0 between, then a close above 100.0.
+function dbDay(dayIndex, over = {}) {
+  const script = {};
+  const path = [[3, 99.6], [4, 99.2], [5, 98.8], [6, 98.5], [7, 98.3], [8, 98.2], [9, 98.15], [10, 98.1],
+    [11, 98.6], [12, 99.0], [13, 99.4], [14, 99.7], [15, 99.8], [16, 99.7],
+    [17, 99.4], [18, 99.0], [19, 98.7], [20, 98.4], [21, 98.3], [22, 98.2],
+    [23, 98.7], [24, 99.2], [25, 99.6]];
+  let prev = 100;
+  for (const [k, c] of path) { script[k] = { o: prev, c, h: Math.max(prev, c) + 0.1, l: Math.min(prev, c) - 0.1 }; prev = c; }
+  script[10] = { o: 98.15, c: 98.1, h: 98.25, l: 98.0 };
+  script[22] = { o: 98.3, c: 98.2, h: 98.4, l: 98.1 };
+  script[16] = { o: 99.8, c: 99.7, h: 100.0, l: 99.6 };
+  script[26] = { o: 99.6, c: 100.5, h: 100.6, l: 99.6, v: 3000 };
+  script[27] = { o: 100.5, c: 100.5, h: 100.6, l: 100.4 };
+  return makeDay(dayIndex, 100, { ...script, ...over });
+}
+
+test("double bottom: buys the close above the middle peak, stop under the lows", () => {
+  const [t] = run2(dbDay(1), only("dbottom"));
+  assert.ok(t, "expected a double-bottom trade");
+  assert.equal(t.setup, "dbottom");
+  assert.ok(t.stop < 98.0 && t.stop > 97.8, `stop ${t.stop}`);
+});
+
+test("double bottom: lows that are not equal are not a double bottom", () => {
+  const day = dbDay(1, { 22: { o: 97.5, c: 97.2, h: 97.6, l: 96.8 }, 21: { o: 98.3, c: 97.5, h: 98.3, l: 97.4 }, 23: { o: 97.2, c: 98.7, h: 98.8, l: 97.2 } });
+  assert.equal(run2(day, only("dbottom")).length, 0);
+});
+
+// Gap and go: opens 3% above the previous close (100), holds, breaks the first 15-minute high at bar 3.
+function gapDay(dayIndex, base = 103) {
+  return makeDay(dayIndex, base, {
+    0: { o: base, c: base + 0.2, h: base + 0.5, l: base },
+    1: { o: base + 0.2, c: base + 0.1, h: base + 0.4, l: base },
+    2: { o: base + 0.1, c: base + 0.3, h: base + 0.4, l: base },
+    3: { o: base + 0.3, c: base + 0.9, h: base + 1.0, l: base + 0.3, v: 4000 },
+    4: { o: base + 0.9, c: base + 0.9, h: base + 1.0, l: base + 0.8 },
+  });
+}
+const gapDays = (day) => toSessions(concat(makeDay(0, 100), day));
+
+test("gap and go: trades a gap that holds, labelled as 'gap'", () => {
+  const c = makeConfig({ equity: 10000, riskPct: 1, slippageBps: 0, maxRiskPct: 3, setups: { orb: { enabled: true }, vwap: { enabled: false }, gap: { enabled: true } } });
+  const [t] = backtestSymbol("T", gapDays(gapDay(1)), c).trades;
+  assert.equal(t.setup, "gap");
+});
+
+test("gap and go: no gap, no trade (the plain breakout is still the opening-range setup)", () => {
+  const c = makeConfig({ equity: 10000, riskPct: 1, slippageBps: 0, maxRiskPct: 3, setups: { orb: { enabled: false }, vwap: { enabled: false }, gap: { enabled: true } } });
+  assert.equal(backtestSymbol("T", gapDays(gapDay(1, 100)), c).trades.length, 0);
+});
+
+test("gap and go: a gap that has already filled (range low under yesterday's close) is skipped", () => {
+  const c = makeConfig({ equity: 10000, riskPct: 1, slippageBps: 0, maxRiskPct: 8, setups: { orb: { enabled: false }, vwap: { enabled: false }, gap: { enabled: true } } });
+  const day = makeDay(1, 103, {
+    0: { o: 103, c: 101, h: 103.1, l: 99.5 }, 1: { o: 101, c: 101.2, h: 101.4, l: 100.9 }, 2: { o: 101.2, c: 101.3, h: 101.5, l: 101.0 },
+    3: { o: 101.3, c: 103.4, h: 103.5, l: 101.3, v: 4000 }, 4: { o: 103.4, c: 103.4 },
+  });
+  assert.equal(backtestSymbol("T", gapDays(day), c).trades.length, 0);
+});
+
+// ---- partial exit: sell half at +1R, then the stop on the rest moves to breakeven
+test("partial exit: half at 1R and half at the 2R target = +1.5R in total", () => {
+  const [t] = run2(flagDay(1), patCfg({ partial: { enabled: true } }));
+  assert.ok(t.partial, "expected a partial exit");
+  assert.ok(Math.abs(t.partial.price - (103.3 + 1.05)) < 0.02);
+  assert.ok(Math.abs(t.netR - 1.5) < 0.02, `netR ${t.netR}`);
+  assert.equal(t.exitReason, "target");
+});
+
+test("partial exit: after the half is sold, a drop back to entry costs nothing (+0.5R in total)", () => {
+  const day = flagDay(1, {
+    14: { o: 103.3, c: 104.4, h: 104.5, l: 103.3 },
+    15: { o: 104.4, c: 103.3, h: 104.4, l: 103.2 },
+  });
+  const [t] = run2(day, patCfg({ partial: { enabled: true } }));
+  assert.ok(Math.abs(t.netR - 0.5) < 0.03, `netR ${t.netR}`);
+  assert.equal(t.exitReason, "stop");
+  const [plain] = run2(day, patCfg());
+  assert.ok(plain.holdBars > t.holdBars, "without the breakeven stop the trade is still open after the dip");
+});
+
+test("partial exit: P&L and shares add up (sold shares at 1R plus the rest at the exit)", () => {
+  const [t] = run2(flagDay(1), patCfg({ partial: { enabled: true } }));
+  const rest = t.shares - t.partial.shares;
+  const expected = t.partial.shares * (t.partial.price - t.entry) + rest * (t.target - t.entry);
+  assert.ok(Math.abs(t.pnl - expected) < 0.05, `${t.pnl} vs ${expected}`);
+});
+
+// ---- midday lull
+test("avoid midday: blocks entries between 11:30 and 14:00 ET, allows them otherwise", () => {
+  // the triangle breakout signal is on bar 24 = 11:30 ET
+  assert.equal(run2(triDay(1), patCfg({ avoidMidday: false })).length, 1);
+  assert.equal(run2(triDay(1), patCfg({ avoidMidday: true })).length, 0);
+  // the flag breakout is at 10:30 ET, outside the lull
+  assert.equal(run2(flagDay(1), patCfg({ avoidMidday: true })).length, 1);
+});
+
+test("crypto ignores the midday lull and the gap setup", () => {
+  const c = configFor(makeConfig({ avoidMidday: true, setups: { gap: { enabled: true } } }), "BTC-USD");
+  assert.equal(c.avoidMidday, false);
+  assert.equal(c.setups.gap.enabled, false);
+});

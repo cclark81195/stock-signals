@@ -87,6 +87,21 @@ Under the cumulative-R chart, "Account balance, with every buy and sell" starts 
 
 The S&P 500 scan has the same two charts (cumulative R and account balance with buy/sell markers). Scan batches also return a trimmed trade list per stock (`/api/daytrade?scan=1`), and the page draws the charts when a scan finishes: all stocks added together, or one stock chosen from the menu or by clicking its symbol in the table. The combined balance treats every stock as having its own account of the chosen size, so it is a sum of independent backtests, not one account's history. The balance chart opens on the widest range with 150 or fewer markers.
 
+## More setups, partial exit and the midday option (all off by default)
+
+Added from a review of common day-trading strategy guides. Each is a strict, fixed rule set, not a drawn pattern:
+
+- **Pullback to moving average** (`pullback`): price above VWAP, 9-bar EMA above a rising 20-bar EMA, the stock up at least 0.5% from its session low; within the last 5 bars price tested the 20-bar EMA; entry on a green bar that closes above the 9-bar EMA and the previous high on at least average volume. Stop under the lowest low of the last 6 bars.
+- **Fibonacci pullback** (`fib`): a swing low then swing high in the last 36 bars, the move at least 8 normal bar-ranges and 0.5% of price, a pullback of 36% to 64% of it that never breaks the swing low, entry on a green bar closing above the previous high but below the swing high. Stop just under the 78.6% level. The move's size is the measured-move target. It fires rarely.
+- **Double bottom** (`dbottom`): two local lows within 0.25% of each other, 6 to 30 bars apart, a rally between them of at least 3 normal bar-ranges and 0.4% of price; entry on the first close above the middle peak on volume. Stop under the lows; pattern height is the measured move.
+- **Gap and go** (`gap`): stocks only. Opened at least 2% above yesterday's close, the opening range's low is still above that close and price is above VWAP; entry on the first close above the first 15 minutes' high before 10:30 ET on volume. It is checked before the plain opening-range breakout. Crypto never uses it.
+- **Sell half at +1R** (`partial`): a limit sale of half the shares at +1R (same fill rule as the target: price must trade a cent through), and the stop on the rest moves to the buy price. If one bar hits both the stop and the +1R level the stop is assumed to hit first. Whole-share trades that cannot be split (one share) skip it. The trade is recorded once, with the average sell price and the total result in R of the original risk.
+- **Skip the midday lull** (`avoidMidday`): no new entries from 11:30 to 14:00 ET (stocks only).
+
+Not built, on purpose: RSI/MACD overbought-oversold, Bollinger Band fades, order blocks, and reversal/short setups (long-only account, lagging or subjective rules).
+
+Sanity check used while building: on 150 random-walk stocks (no edge by construction) every setup came out slightly negative after costs, which is what a bug-free, look-ahead-free test should show. Real-data results are still unknown.
+
 ## Known limits
 
 - Each symbol is backtested independently; the live guard is portfolio-wide, so the real bot will trade less than the backtest implies.

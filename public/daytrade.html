@@ -94,6 +94,22 @@
           <label class="check"><input type="checkbox" id="f-tri" aria-describedby="h-tri" /> Ascending triangle <span class="dt-new">new</span></label>
           <span class="help dt-ex" id="h-tri">Looks for a flat ceiling touched at least twice in the last 2 hours while the lows keep rising. Buys the first close above the ceiling on strong volume. The stop sits under the most recent low.</span>
         </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-pb" aria-describedby="h-pb" /> Pullback to moving average <span class="dt-new">new</span></label>
+          <span class="help dt-ex" id="h-pb">In an uptrend (price above VWAP, the 9-bar average above a rising 20-bar average), waits for a dip that tests the 20-bar average, then buys when a green bar closes back above the 9-bar average and the last high. The stop sits under the dip.</span>
+        </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-fib" aria-describedby="h-fib" /> Fibonacci pullback <span class="dt-new">new</span></label>
+          <span class="help dt-ex" id="h-fib">After a clear up-move, waits for a pullback of 38% to 62% of that move that does not break the starting low, then buys the first green bar that closes above the last high. The stop sits just under the 78.6% level.</span>
+        </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-dbot" aria-describedby="h-dbot" /> Double bottom <span class="dt-new">new</span></label>
+          <span class="help dt-ex" id="h-dbot">Two lows within 0.25% of each other (6 to 30 bars apart) with a rally between them. Buys the first close above the middle peak on strong volume. The stop sits under the lows.</span>
+        </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-gap" aria-describedby="h-gap" /> Gap and go <span class="dt-new">new</span></label>
+          <span class="help dt-ex" id="h-gap">For stocks that open at least 2% above yesterday's close and hold the gap. Buys the first close above the first 15 minutes' high (before 10:30 ET) on strong volume. Stocks only. It takes priority over the plain opening-range breakout when both are on.</span>
+        </div>
       </div>
       <div class="dt-setups cols3" role="group" aria-label="Filters and exit">
         <div class="dt-setup">
@@ -111,6 +127,14 @@
             <option value="measured">Measured move (flag and triangle)</option>
           </select>
           <span class="help dt-ex" id="h-exit">Fixed uses your profit target for every setup. Measured move aims for the height of the pattern (the rise before the flag, or the triangle's height), kept between 1R and 4R. Opening-range and VWAP trades always use the fixed target.</span>
+        </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-midday" aria-describedby="h-midday" /> Skip the midday lull</label>
+          <span class="help dt-ex" id="h-midday">No new buys between 11:30 AM and 2:00 PM ET, when trading is often slow and choppy. Stocks only; crypto ignores it.</span>
+        </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-partial" aria-describedby="h-partial" /> Sell half at +1R</label>
+          <span class="help dt-ex" id="h-partial">When a trade reaches a profit equal to the amount risked (+1R), sells half and moves the stop on the rest to the buy price. This wins more often and gives up some of the big winners. With whole shares, a one-share trade cannot be split.</span>
         </div>
       </div>
       <button type="submit" id="f-run" class="dt-run">Run backtest</button>
@@ -271,10 +295,10 @@
           <summary>What these columns and exit reasons mean</summary>
           <dl>
             <dt>When (ET)</dt><dd>The day and time the trade was entered, in New York time.</dd>
-            <dt>Buy price / Sell price</dt><dd>The price per share paid and received. Both include slippage where it applies, so they are slightly worse than the raw market price.</dd>
+            <dt>Buy price / Sell price</dt><dd>The price per share paid and received. Both include slippage where it applies, so they are slightly worse than the raw market price. If half was sold early (the "Sell half at +1R" option), the sell price is the average of the two sales.</dd>
             <dt>Shares</dt><dd>How many shares (or units of crypto) were bought and then sold. With "Dollars per buy" filled in, it is that amount divided by the buy price; otherwise it is sized so that hitting the stop loses about your chosen risk.</dd>
             <dt>Exit reason</dt>
-            <dd><strong>Target:</strong> price reached the profit target. <strong>Stop:</strong> price hit the stop. <strong>Gap through stop:</strong> price opened below the stop, so the exit was at the open and the loss is larger than planned. <strong>End-of-day close:</strong> still open at the cutoff (3:45 PM ET for stocks, 23:45 UTC for crypto), so it was closed. <strong>Session end:</strong> the data ended before the cutoff, such as on a half day.</dd>
+            <dd><strong>Target:</strong> price reached the profit target. <strong>Stop:</strong> price hit the stop. <strong>Gap through stop:</strong> price opened below the stop, so the exit was at the open and the loss is larger than planned. <strong>End-of-day close:</strong> still open at the cutoff (3:45 PM ET for stocks, 23:45 UTC for crypto), so it was closed. <strong>&frac12; at 1R</strong> next to a reason means half the shares were sold at +1R first, and the reason is how the other half ended. <strong>Session end:</strong> the data ended before the cutoff, such as on a half day.</dd>
             <dt>Result</dt><dd>The outcome after costs in R. +2R is twice the amount risked; &minus;1R is a full loss of the amount risked. It can be a bit below &minus;1R after slippage or a gap.</dd>
             <dt>P&amp;L</dt><dd>Profit or loss in dollars: (sell price &minus; buy price) &times; shares, after costs. The last row of the table adds them all up.</dd>
           </dl>
