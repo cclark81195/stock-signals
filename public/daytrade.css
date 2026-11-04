@@ -84,9 +84,9 @@
 .dt-chart-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 6px; }
 .dt-chart-title .hint { display: inline; margin-left: 6px; font-weight: 400; }
 #dt-curve svg, #sp-curve svg { display: block; width: 100%; height: auto; }
-#sw-acct .zero, #dt-curve .zero, #sp-curve .zero, #sw-curve .zero { stroke: var(--border); stroke-dasharray: 4 4; }
-#sw-acct .line, #dt-curve .line, #sp-curve .line, #sw-curve .line { fill: none; stroke: var(--series-price); stroke-width: 2; stroke-linejoin: round; }
-#sw-acct .lbl, #dt-curve .lbl, #sp-curve .lbl, #sw-curve .lbl { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+#dt-curve .zero, #sp-curve .zero, #sw-curve .zero { stroke: var(--border); stroke-dasharray: 4 4; }
+#dt-curve .line, #sp-curve .line, #sw-curve .line { fill: none; stroke: var(--series-price); stroke-width: 2; stroke-linejoin: round; }
+#dt-curve .lbl, #sp-curve .lbl, #sw-curve .lbl { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .dt-empty { color: var(--muted); text-align: center; padding: 28px 0; font-size: 0.9rem; }
 
 /* ---- tables ---- */
@@ -181,6 +181,6 @@ body.dt-explain .dt-ex { display: block; }
 
 .dt-scansec h4 { font-size: 0.9rem; margin: 14px 0 6px; color: var(--text-2); }
 .dt-setups[hidden] { display: none; }
-#sw-acct .line2 { fill: none; stroke: var(--series-ma50); stroke-width: 2; stroke-linejoin: round; }
 .dt-ballegend .lg.ln { width: 14px; height: 3px; border: 0; background: var(--series-price); vertical-align: 3px; border-radius: 2px; }
 .dt-ballegend .lg.ln.sp { background: var(--series-ma50); }
+.bal-svg .spy { fill: none; stroke: var(--series-ma50); stroke-width: 1.6; stroke-linejoin: round; opacity: 0.9; }
