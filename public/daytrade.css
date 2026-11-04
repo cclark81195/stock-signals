@@ -174,7 +174,9 @@ body.dt-explain .dt-ex { display: block; }
 .dt-ballegend .lg.sell.loss { border-top-color: var(--sell); }
 .dt-baldetail { margin: 6px 0 4px; min-height: 1.4em; }
 
-.dt-sp-chartpick { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 0.84rem; color: var(--text-2); }
+.dt-sp-chartpick { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 0.84rem; color: var(--text-2); }
 .dt-sp-chartpick select { font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); max-width: 100%; }
 .dt-linkbtn { font: inherit; font-weight: 700; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline dotted; }
 #sp-balcard { margin-top: 12px; }
+
+.dt-scansec h4 { font-size: 0.9rem; margin: 14px 0 6px; color: var(--text-2); }

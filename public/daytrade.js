@@ -623,7 +623,7 @@ const dashBalance = makeBalanceChart($("dt-balcard"));
 // Runs the current settings on every S&P 500 stock, ten at a time (the API's per-run limit),
 // two batches in flight. Each batch returns small ADDABLE totals per stock, so the page can
 // combine them exactly into sector and whole-index numbers.
-const sp = { rows: new Map(), failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, stocks: [], used: "", equity: 10000 };
+const sp = { rows: new Map(), failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, stocks: [], used: "", equity: 10000, slip: 2 };
 const spBalance = makeBalanceChart($("sp-balcard"));
 const SP_BATCH = 10, SP_PARALLEL = 2;
 
@@ -655,6 +655,55 @@ function spRowView(r) {
   };
 }
 
+
+// Merge the diagnostics detail carried on each stock's "all" totals.
+function spDetail(rows) {
+  const d = { stopPctSum: 0, holdBarsSum: 0, partials: 0, byExit: {}, bySetup: {} };
+  for (const r of rows) {
+    const a = r.all;
+    if (!a || !a.byExit) continue;
+    d.stopPctSum += a.stopPctSum; d.holdBarsSum += a.holdBarsSum; d.partials += a.partials;
+    for (const [k, v] of Object.entries(a.byExit)) { const e = (d.byExit[k] ||= { trades: 0, sumNetR: 0 }); e.trades += v.trades; e.sumNetR += v.sumNetR; }
+    for (const [k, v] of Object.entries(a.bySetup)) {
+      const g = (d.bySetup[k] ||= { trades: 0, wins: 0, sumNetR: 0, sumGrossR: 0, sumWinR: 0, sumLossR: 0, pnl: 0 });
+      for (const f of Object.keys(g)) g[f] += v[f];
+    }
+  }
+  return d;
+}
+
+function spRenderDiagnostics(rows, all) {
+  const d = spDetail(rows);
+  const n = all.trades;
+  if (!n) { $("sp-diag").innerHTML = ""; $("sp-bysetup").innerHTML = ""; $("sp-byexit").innerHTML = ""; return; }
+  const losses = n - all.wins;
+  const avgWin = all.wins ? all.sumWinR / all.wins : null;
+  const avgLoss = losses ? all.sumLossR / losses : null;
+  const gross = all.sumGrossR / n, net = all.sumNetR / n;
+  const stopPct = d.stopPctSum / n;
+  const costEst = stopPct > 0 ? ((2 * sp.slip) / 100) / stopPct : null;
+  $("sp-diag").innerHTML = [
+    tile("Average win", avgWin == null ? "-" : `+${avgWin.toFixed(2)}R`, "after costs", "pos", "The average winning trade. It has to be big enough, together with the win rate, to pay for the losers."),
+    tile("Average loss", avgLoss == null ? "-" : `−${avgLoss.toFixed(2)}R`, "after costs", "neg", "The average losing trade. Around −1R is normal; more means gaps, slippage or exits that run past the stop."),
+    tile("Before costs", `${sgn(gross)}R`, "per trade, if trading were free", cls(gross), "The average result per trade ignoring slippage. If this is near zero or negative, the setups have no edge to protect, and cutting costs will not fix it."),
+    tile("After costs", `${sgn(net)}R`, `costs take ${(gross - net).toFixed(2)}R per trade`, cls(net), "The average result per trade after slippage. Costs take the gap between this and the number above."),
+    tile("Average stop distance", `${stopPct.toFixed(2)}%`, costEst == null ? "of the buy price" : `costs of about ${costEst.toFixed(2)}R at ${(2 * sp.slip).toFixed(1)} bps round trip`, "", "How far below the buy price the stop sat, on average. Tight stops mean fixed costs eat a larger share of each R."),
+    tile("Average hold", `${Math.round((d.holdBarsSum / n) * 5)} min`, d.partials ? `${d.partials} trades sold half early` : "", "", "How long a trade stayed open on average."),
+  ].join("");
+
+  const setups = Object.entries(d.bySetup).sort((a, b) => b[1].sumNetR / b[1].trades - a[1].sumNetR / a[1].trades);
+  $("sp-bysetup").innerHTML = setups.map(([k, g]) => {
+    const l = g.trades - g.wins, gn = g.sumNetR / g.trades, gg = g.sumGrossR / g.trades;
+    return `<tr><td>${esc(SETUP_NAMES[k] || k)}</td><td class="num">${g.trades}</td><td class="num">${pct0(g.wins / g.trades)}</td>
+      <td class="num">${g.wins ? "+" + (g.sumWinR / g.wins).toFixed(2) + "R" : "-"}</td><td class="num">${l ? "−" + (g.sumLossR / l).toFixed(2) + "R" : "-"}</td>
+      <td class="num ${cls(gg)}">${sgn(gg)}R</td><td class="num ${cls(gn)}">${sgn(gn)}R</td>
+      <td class="num">${g.sumLossR > 0 ? (g.sumWinR / g.sumLossR).toFixed(2) : "-"}</td><td class="num ${cls(g.pnl)}">${money(g.pnl)}</td></tr>`;
+  }).join("");
+
+  const exits = Object.entries(d.byExit).sort((a, b) => b[1].trades - a[1].trades);
+  $("sp-byexit").innerHTML = exits.map(([k, e]) => `<tr><td>${esc(EXIT_NAMES[k] || k)}</td><td class="num">${e.trades}</td><td class="num">${pct0(e.trades / n)}</td><td class="num ${cls(e.sumNetR)}">${sgn(e.sumNetR / e.trades)}R</td></tr>`).join("");
+}
+
 function spRender() {
   const rows = [...sp.rows.values()];
   if (!rows.length) { $("sp-results").hidden = true; return; }
@@ -671,6 +720,8 @@ function spRender() {
     tile("Older half", first.trades ? `${sgn(spExp(first))}R` : "-", `${first.trades} trades, per trade`, cls(spExp(first)), "Per-trade result using only the older half of the tested days."),
     tile("Newer half", second.trades ? `${sgn(spExp(second))}R` : "-", `${second.trades} trades, per trade`, cls(spExp(second)), "Per-trade result using only the newer half. If it disagrees with the older half, treat the result as noise."),
   ].join("");
+
+  spRenderDiagnostics(rows, all);
 
   // by sector
   const bySector = new Map();
@@ -773,6 +824,7 @@ async function spRun(only = null) {
   sp.running = true; sp.cancel = false;
   sp.used = spSettingsNote(s);
   sp.equity = Number(s.equity) || 10000;
+  sp.slip = Number(s.slipBps) || 0;
   $("sp-used").textContent = sp.used;
   $("sp-run").disabled = true; $("sp-cancel").hidden = false; $("sp-retry").hidden = true;
   $("sp-progress").hidden = false;

@@ -326,6 +326,42 @@
         <p class="hint dt-ex">The older half is the first half of the tested days, the newer half the second. If the strategy only pays in one of them, it is probably noise.</p>
 
         <div id="sp-charts" hidden>
+        <h3>Where the money is going</h3>
+        <div class="dt-tiles" id="sp-diag"></div>
+        <p class="hint dt-ex">These split the result into its parts so you can see what to fix. Average win and average loss show whether winners are big enough to pay for losers. "Before costs" is the result if trading were free; the gap to "after costs" is what slippage takes. A small stop distance makes costs bite harder, because the same few cents are a bigger share of each trade's risk.</p>
+
+        <h4>By setup</h4>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Setup</th>
+              <th class="num" title="Number of simulated trades">Trades</th>
+              <th class="num" title="Share of trades that made money after costs">Win %</th>
+              <th class="num" title="Average winning trade after costs, in R">Avg win</th>
+              <th class="num" title="Average losing trade after costs, in R">Avg loss</th>
+              <th class="num" title="Average result per trade if trading were free">Before costs</th>
+              <th class="num" title="Average result per trade after costs">After costs</th>
+              <th class="num" title="Money won divided by money lost">Profit factor</th>
+              <th class="num" title="Profit or loss in dollars after costs">P&amp;L</th>
+            </tr></thead>
+            <tbody id="sp-bysetup"></tbody>
+          </table>
+        </div>
+
+        <h4>How trades ended</h4>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Exit</th>
+              <th class="num" title="Number of trades that ended this way">Trades</th>
+              <th class="num" title="Share of all trades">Share</th>
+              <th class="num" title="Average result per trade after costs, in R">Net R / trade</th>
+            </tr></thead>
+            <tbody id="sp-byexit"></tbody>
+          </table>
+        </div>
+        <p class="hint dt-ex">Target: the profit target was hit. Stop: the stop was hit. Gap through stop: price opened below the stop, so the loss was bigger than planned. End-of-day close: still open at the close, so it was sold. A big share of end-of-day closes means the target may be too far away.</p>
+
         <div class="dt-sp-chartpick">
           <label>Charts show
             <select id="sp-chart-sym"><option value="">All stocks together</option></select>

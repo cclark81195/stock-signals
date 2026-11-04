@@ -73,6 +73,8 @@ Each setup's results are listed separately in "By setup", so you can compare the
 
 The "S&P 500 scan" section of `/daytrade.html` runs the current settings on every S&P 500 stock (the symbols picked at the top are not used). The page sends the list in batches of 10 to `/api/daytrade?scan=1`, two batches at a time, and each batch returns small addable totals per stock (`lib/daytrade/backtest.js: compactStats`) for all tested days and for the older and newer half of them. The page combines them into whole-index, sector and per-stock tables, with sorting, a minimum-trades filter, "Retry failed" and a CSV download.
 
+The scan also has a "Where the money is going" section: average win and loss, result before and after costs, average stop distance (with the cost it implies), average hold, results by setup, and how trades ended (target, stop, gap through stop, end-of-day close). These come from extra detail on each stock's totals (`compactStats(trades, true)`), merged on the page. Use them to find the leak before changing rules: costs large next to a near-zero "before costs" result mean there is no edge to protect; a big share of end-of-day closes suggests the target is too far away; a setup with a low win rate and a negative after-costs result is a candidate to switch off.
+
 How to read it: the whole-index and sector rows are the test; the ranked stock list is not a shopping list. With about 500 stocks and about 60 days of data, the top of the list is mostly luck (on random, edge-free test data the best stocks still show a clearly positive result). Prefer results where the older and newer halves agree, and change one setting at a time between scans.
 
 ## Fixed dollars per buy
