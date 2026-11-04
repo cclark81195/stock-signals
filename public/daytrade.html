@@ -129,6 +129,22 @@
           <div class="dt-chart-title">Cumulative result, in R <span class="hint" id="dt-curve-note"></span></div>
           <div id="dt-curve"></div>
         </div>
+        <div class="dt-chart-card dt-balcard" id="dt-balcard">
+          <div class="dt-chart-title">Account balance, with every buy and sell <span class="hint" id="dt-bal-note"></span></div>
+          <div class="dt-balbar" role="group" aria-label="Chart range">
+            <button type="button" class="dt-mini" data-win="1">1 day</button>
+            <button type="button" class="dt-mini" data-win="5">5 days</button>
+            <button type="button" class="dt-mini" data-win="20">20 days</button>
+            <button type="button" class="dt-mini" data-win="all">All</button>
+            <span class="dt-balspacer"></span>
+            <button type="button" class="dt-mini" id="dt-bal-prev" aria-label="Earlier days">&larr; Earlier</button>
+            <button type="button" class="dt-mini" id="dt-bal-next" aria-label="Later days">Later &rarr;</button>
+          </div>
+          <div id="dt-bal"></div>
+          <p class="dt-ballegend"><span><i class="lg buy"></i> Buy</span> <span><i class="lg sell win"></i> Sell at a profit</span> <span><i class="lg sell loss"></i> Sell at a loss</span> <span class="hint" id="dt-bal-range"></span></p>
+          <p class="hint dt-baldetail" id="dt-bal-detail" aria-live="polite">Tap or click a marker to see that trade.</p>
+        </div>
+        <p class="hint dt-ex">The balance chart starts from your account size and changes each time a trade is sold (closed). Triangles pointing up are buys and triangles pointing down are sells; a sell is green when the trade made money and red when it lost. Trades on different stocks that overlap in time are added to one balance as if there were enough money for all of them, and nothing compounds. The early-days view is zoomed out, so use the buttons to zoom in on a few days and see each buy and sell apart.</p>
         <p class="hint dt-ex">Each step on the line is one finished trade, in order, so a rising line means the rules made money and sharp drops are losing streaks. The dashed line is break-even.</p>
         <p class="hint dt-ex"><strong>R</strong> is the amount you risk on one trade: +2R means you made twice what you risked, &minus;1R means you lost exactly what you risked. "Before costs" ignores slippage; "after costs" includes it.</p>
       </section>

@@ -128,7 +128,7 @@ export default async function handler(req, res) {
       aggregate: summarize(allTrades),
       byClass,
       tradesTotal: allTrades.length,
-      recentTrades: allTrades.sort((a, b) => b.exitTime - a.exitTime).slice(0, 500), // newest first; the page shows them all
+      recentTrades: allTrades.sort((a, b) => b.exitTime - a.exitTime).slice(0, 1500), // newest first; the page shows them all
       symbols: rows,
     });
   } catch (e) {

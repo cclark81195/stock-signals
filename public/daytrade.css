@@ -149,3 +149,27 @@ body.dt-explain .dt-ex { display: block; }
 #sp-table th.sortable[aria-sort="ascending"]::after { content: " \2191"; }
 #sp-table th.sortable[aria-sort="descending"]::after { content: " \2193"; }
 #sp-more { margin-top: 8px; }
+
+/* Account balance chart */
+.dt-balcard { margin-top: 12px; }
+.dt-balbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 8px; }
+.dt-balspacer { flex: 1 1 auto; }
+.dt-balbar .dt-mini[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dt-balbar .dt-mini:disabled { opacity: 0.45; cursor: not-allowed; }
+#dt-bal svg { display: block; width: 100%; height: auto; }
+#dt-bal .grid { stroke: var(--grid); }
+#dt-bal .start { stroke: var(--muted); stroke-dasharray: 4 4; }
+#dt-bal .day { stroke: var(--border); stroke-dasharray: 2 4; }
+#dt-bal .line { fill: none; stroke: var(--series-price); stroke-width: 2; stroke-linejoin: round; }
+#dt-bal .lbl { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+#dt-bal .mk { cursor: pointer; stroke: var(--surface); stroke-width: 1; }
+#dt-bal .mk.buy { fill: var(--accent); }
+#dt-bal .mk.sell.win { fill: var(--buy); }
+#dt-bal .mk.sell.loss { fill: var(--sell); }
+#dt-bal .mk:focus-visible, #dt-bal .mk.sel { stroke: var(--text); stroke-width: 2; outline: none; }
+.dt-ballegend { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; margin: 6px 0 0; font-size: 0.78rem; color: var(--text-2); }
+.dt-ballegend .lg { display: inline-block; width: 0; height: 0; margin-right: 4px; vertical-align: -1px; border-left: 5px solid transparent; border-right: 5px solid transparent; }
+.dt-ballegend .lg.buy { border-bottom: 9px solid var(--accent); }
+.dt-ballegend .lg.sell { border-top: 9px solid var(--buy); }
+.dt-ballegend .lg.sell.loss { border-top-color: var(--sell); }
+.dt-baldetail { margin: 6px 0 4px; min-height: 1.4em; }
