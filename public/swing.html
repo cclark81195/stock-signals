@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Swing Lab - Index Signal Scanner</title>
+  <meta name="description" content="Research tool: multi-day swing strategies tested on up to 10 years of daily prices across the S&P 500, with costs included. Places no orders." />
+  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="daytrade.css" />
+</head>
+<body class="dt">
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo" src="logo.png" width="76" height="56" alt="FFS Global" />
+      <span>Swing Lab</span>
+    </div>
+    <a class="dt-link" href="/">&larr; Index scanner</a>
+    <a class="dt-link" href="daytrade.html">Day Trade Lab</a>
+    <p class="updated" id="sw-updated" role="status">Not run yet</p>
+  </header>
+
+  <main class="dt-main">
+    <p class="dt-banner">
+      <strong>Research only.</strong> This page tests multi-day trades (hold for days, not minutes) on up to <strong>10 years of daily prices</strong> for every S&amp;P 500 stock, with trading costs included.
+      Long trades are far fewer and bigger than day trades, so the same costs take a much smaller bite, and ten years covers several different markets. It places no orders.
+    </p>
+
+    <div class="dt-explainbar">
+      <button type="button" id="dt-explain" class="dt-explain-btn" aria-expanded="false">
+        <span class="dt-chev" aria-hidden="true"></span><span id="dt-explain-label">Show explanations</span>
+      </button>
+      <span class="help">What every setting, number and column means. Hidden by default to save space.</span>
+    </div>
+
+    <form class="dt-controls" id="sw-form" autocomplete="off">
+      <label>Strategy
+        <select id="s-strategy" aria-describedby="h-strategy">
+          <option value="meanrev">Buy sharp dips in an uptrend</option>
+          <option value="breakout">Buy new highs and ride the trend</option>
+        </select>
+        <span class="help dt-ex" id="h-strategy"><strong>Dips:</strong> in a stock that is in a long-term uptrend, buy after a sudden 2-day drop and sell on the bounce, usually within a week. Wins often, small gains. <strong>New highs:</strong> buy when a stock closes above its highest price of the last 55 days and hold until it breaks below its 20-day low. Wins rarely, big gains.</span>
+      </label>
+      <label>History
+        <select id="s-years" aria-describedby="h-years">
+          <option value="10">10 years</option>
+          <option value="5">5 years</option>
+        </select>
+        <span class="help dt-ex" id="h-years">How far back to test. The first 200 days are used to warm up the averages, so the test starts about 10 months after the first day downloaded.</span>
+      </label>
+      <label>Dollars per buy ($)
+        <input id="s-dollars" type="number" min="1" step="1" value="100" inputmode="decimal" aria-describedby="h-dollars" />
+        <span class="help dt-ex" id="h-dollars">Spend this fixed amount on every buy, using fractional shares. It only changes the dollar figures; the R figures do not depend on it.</span>
+      </label>
+      <label>Slippage (bps/side)
+        <input id="s-slip" type="number" min="0" max="50" step="0.5" value="5" inputmode="decimal" aria-describedby="h-slip" />
+        <span class="help dt-ex" id="h-slip">The cost of imperfect fills, charged on every buy and sell. 5 bps is 0.05%, about 5 cents on a $100 stock. This is more than the Day Trade Lab uses because stops here are filled at worse prices on fast days.</span>
+      </label>
+      <label>Stop distance (ATRs)
+        <input id="s-stop" type="number" min="0.5" max="10" step="0.5" value="3" inputmode="decimal" aria-describedby="h-stop" />
+        <span class="help dt-ex" id="h-stop">How far below the buy price to place the stop, measured in "average true ranges": the stock's typical daily move over the last 14 days. 3 means a stop three typical days away. That distance is also the "1R" every result is measured in. Wider stops get hit less often.</span>
+      </label>
+      <label class="check"><input id="s-trend" type="checkbox" checked aria-describedby="h-trend" /> Only buy in an uptrend
+        <span class="help dt-ex" id="h-trend">Skip any buy unless the stock's price is above its own 200-day average. This stops the dip strategy from "buying the dip" in a stock that is simply falling.</span>
+      </label>
+      <label class="check"><input id="s-mkt" type="checkbox" aria-describedby="h-mkt" /> Only buy when the market is up
+        <span class="help dt-ex" id="h-mkt">Also require SPY to be above its own 200-day average. Keeps the strategy out of bear markets, which is where most of the big losses hide.</span>
+      </label>
+
+      <div class="dt-setups cols3" id="sw-mr">
+        <label>Buy when 2-day RSI is below
+          <input id="s-rsi" type="number" min="1" max="50" step="1" value="10" inputmode="numeric" aria-describedby="h-rsi" />
+          <span class="help dt-ex" id="h-rsi">RSI measures how one-sided recent moves were, from 0 to 100. A 2-day RSI under 10 means the stock just fell hard over two days. Lower is stricter and rarer.</span>
+        </label>
+        <label>Sell when price closes above its average of (days)
+          <input id="s-exma" type="number" min="2" max="50" step="1" value="5" inputmode="numeric" aria-describedby="h-exma" />
+          <span class="help dt-ex" id="h-exma">The exit. When the stock closes above its average of this many days, the bounce is considered done and it sells at the next open.</span>
+        </label>
+        <label>Give up after (days)
+          <input id="s-hold" type="number" min="0" max="500" step="1" value="10" inputmode="numeric" aria-describedby="h-hold" />
+          <span class="help dt-ex" id="h-hold">Sell anyway if the trade has lasted this many days. 0 means no limit. The dip strategy defaults to 10; the new-highs strategy to no limit.</span>
+        </label>
+      </div>
+      <div class="dt-setups cols3" id="sw-bo" hidden>
+        <label>Buy a new high of (days)
+          <input id="s-elen" type="number" min="10" max="200" step="5" value="55" inputmode="numeric" aria-describedby="h-elen" />
+          <span class="help dt-ex" id="h-elen">Buy when the close is above the highest price of this many previous days. 55 is the classic "Turtle" setting.</span>
+        </label>
+        <label>Sell below the low of (days)
+          <input id="s-xlen" type="number" min="5" max="100" step="5" value="20" inputmode="numeric" aria-describedby="h-xlen" />
+          <span class="help dt-ex" id="h-xlen">The exit. When the close drops below the lowest price of this many previous days, it sells at the next open. A longer window lets trends breathe but gives back more profit.</span>
+        </label>
+        <label>Give up after (days)
+          <input id="s-hold2" type="number" min="0" max="500" step="1" value="0" inputmode="numeric" aria-describedby="h-hold2" />
+          <span class="help dt-ex" id="h-hold2">Optional time limit in days. 0 means hold until the exit rule or the stop says otherwise.</span>
+        </label>
+      </div>
+      <label class="wide">Only these symbols (optional)
+        <input id="s-symbols" type="text" placeholder="Leave blank for the whole S&amp;P 500, or type e.g. AAPL, MSFT, SPY" aria-describedby="h-symbols" />
+        <span class="help dt-ex" id="h-symbols">Comma-separated tickers. Handy for a quick test before a full scan. SPY works too, though ETFs have no sector.</span>
+      </label>
+    </form>
+
+    <section class="dt-scansec" aria-label="Scan">
+      <div class="dt-sp-actions">
+        <button type="button" id="sw-run" class="dt-run dt-sp-run" disabled>Run the test</button>
+        <button type="button" id="sw-cancel" class="dt-mini" hidden>Stop</button>
+        <button type="button" id="sw-retry" class="dt-mini" hidden>Retry failed</button>
+        <button type="button" id="sw-csv" class="dt-mini" hidden>Download CSV</button>
+      </div>
+      <div class="dt-progress" id="sw-progress" hidden><div class="dt-bar"><span id="sw-bar"></span></div><span class="hint" id="sw-progress-text"></span></div>
+      <p class="status" id="sw-status" role="status"></p>
+      <p class="hint" id="sw-used"></p>
+
+      <div id="sw-results" hidden>
+        <h3>The whole index</h3>
+        <div class="dt-tiles" id="sw-tiles"></div>
+        <p class="hint dt-ex">The older half is the first half of the tested days, the newer half the second. A real edge shows up in both. One that only pays in one half is probably a feature of that period, not of the strategy.</p>
+
+        <h3>Where the money is going</h3>
+        <div class="dt-tiles" id="sw-diag"></div>
+
+        <h4>Year by year</h4>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Year bought</th>
+              <th class="num" title="Trades entered in this year">Trades</th>
+              <th class="num" title="Share of trades that made money after costs">Win %</th>
+              <th class="num" title="Average result per trade after costs, in R">Net R / trade</th>
+              <th class="num" title="Profit or loss in dollars after costs">P&amp;L</th>
+            </tr></thead>
+            <tbody id="sw-years"></tbody>
+          </table>
+        </div>
+        <p class="hint dt-ex">The most important table on this page. A strategy that makes money in most years, including the bad ones (2020 and 2022 are in the 10-year window), is much more believable than one whose total comes from a single good year.</p>
+
+        <h4>How trades ended</h4>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Exit</th>
+              <th class="num" title="Number of trades that ended this way">Trades</th>
+              <th class="num" title="Share of all trades">Share</th>
+              <th class="num" title="Average result per trade after costs, in R">Net R / trade</th>
+            </tr></thead>
+            <tbody id="sw-exits"></tbody>
+          </table>
+        </div>
+        <p class="hint dt-ex">Exit signal: the strategy's own sell rule fired. Stop: price fell to the stop. Gap through stop: price opened below the stop, so the loss is bigger than planned. Time limit: the trade lasted the maximum days. Still open: the data ended while the trade was open, so it is valued at the last close.</p>
+
+        <div class="dt-chart-card">
+          <div class="dt-chart-title">Cumulative result, in R <span class="hint" id="sw-curve-note"></span></div>
+          <div id="sw-curve"></div>
+        </div>
+        <p class="hint dt-ex">Every stock's trades added into one line in the order they closed. R, not dollars, so one very large position cannot hide a losing strategy.</p>
+
+        <h3>By sector</h3>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Sector</th>
+              <th class="num">Stocks</th>
+              <th class="num">Trades</th>
+              <th class="num">Win %</th>
+              <th class="num">Net R / trade</th>
+              <th class="num">P&amp;L</th>
+              <th class="num" title="Average result per trade in the older half of the days">Older half</th>
+              <th class="num" title="Average result per trade in the newer half of the days">Newer half</th>
+            </tr></thead>
+            <tbody id="sw-sectors"></tbody>
+          </table>
+        </div>
+
+        <h3>Each stock</h3>
+        <div class="dt-sp-filters">
+          <label>Show stocks with at least
+            <select id="sw-min"><option value="1">1 trade</option><option value="10" selected>10 trades</option><option value="20">20 trades</option><option value="40">40 trades</option></select>
+          </label>
+          <span class="hint" id="sw-shown"></span>
+        </div>
+        <div class="table-wrap">
+          <table class="stocks dt-table" id="sw-table">
+            <thead><tr>
+              <th class="sortable" data-k="symbol">Symbol</th>
+              <th class="sortable" data-k="sector">Sector</th>
+              <th class="sortable num" data-k="trades">Trades</th>
+              <th class="sortable num" data-k="winRate">Win %</th>
+              <th class="sortable num" data-k="exp" title="Average result per trade after costs, in R">Net R / trade</th>
+              <th class="sortable num" data-k="pnl">P&amp;L</th>
+              <th class="sortable num" data-k="expFirst">Older half</th>
+              <th class="sortable num" data-k="expSecond">Newer half</th>
+              <th class="sortable num" data-k="holdPct" title="What simply buying and holding the stock for the whole download would have returned">Buy &amp; hold</th>
+            </tr></thead>
+            <tbody id="sw-body"></tbody>
+          </table>
+        </div>
+        <button type="button" id="sw-more" class="dt-mini" hidden></button>
+        <p class="hint" id="sw-failed" hidden></p>
+
+        <h3>Most recent trades <span class="hint" id="sw-trades-count"></span></h3>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Bought</th><th>Sold</th><th>Symbol</th>
+              <th class="num" title="Price paid per share, including slippage">Buy price</th>
+              <th class="num" title="Price received per share, after slippage">Sell price</th>
+              <th class="num" title="Fractional shares bought and sold">Shares</th>
+              <th class="num" title="Trading days the trade lasted">Days</th>
+              <th>Exit reason</th>
+              <th class="num" title="Result after costs, in R">Result</th>
+              <th class="num" title="Profit or loss in dollars after costs">P&amp;L</th>
+            </tr></thead>
+            <tbody id="sw-trades"></tbody>
+            <tfoot id="sw-trades-foot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <details class="about dt-about">
+      <summary>How the strategies and the test work</summary>
+      <p><strong>Buy sharp dips.</strong> If a stock closes above its 200-day average (a long-term uptrend) and its 2-day RSI is below 10 (it just dropped hard), the system buys at the next day's open. It sells at the open after the stock closes above its 5-day average, after 10 days at most, or at the stop.</p>
+      <p><strong>Buy new highs.</strong> If a stock closes above its highest price of the previous 55 days (and above its 200-day average), it buys at the next open and holds until a close below the previous 20-day low, or the stop.</p>
+      <p><strong>Stops and R.</strong> The stop sits a set number of average daily ranges (ATR) below the buy price, and that distance is 1R. If a day trades through the stop the test sells at the stop price, plus slippage; if a day opens below it, it sells at the open, which can be a loss bigger than 1R.</p>
+      <p><strong>No peeking.</strong> Every signal uses only prices up to that day's close, and the order fills at the next day's open. The automated tests check that changing future prices never changes a trade that already happened.</p>
+      <p><strong>Limits.</strong> Yahoo's daily prices are adjusted for stock splits but not dividends, so returns are slightly understated. The stock list is today's S&amp;P 500, which leaves out companies that were removed after failing (survivorship bias) and flatters every long-only test, especially over ten years. Each stock is traded on its own with a fixed dollar amount, so this shows the strategy's edge, not the result of one real account with limited cash. Historical P/E ratios are not available from this data source (only today's), so valuation is not used here; testing it on past data would quietly use information that was unknown at the time.</p>
+    </details>
+  </main>
+
+  <footer class="disclaimer">
+    Prices from Yahoo Finance. Backtests are simulations on past prices, not predictions, and nothing here is financial advice.
+  </footer>
+  <script type="module" src="swing.js"></script>
+</body>
+</html>

@@ -19,6 +19,7 @@
       <span>Day Trade Lab</span>
     </div>
     <a class="dt-link" href="/">&larr; Index scanner</a>
+    <a class="dt-link" href="swing.html">Swing Lab</a>
     <p class="updated" id="dt-updated" role="status">Not run yet</p>
   </header>
 
@@ -347,6 +348,22 @@
             <tbody id="sp-bysetup"></tbody>
           </table>
         </div>
+
+        <h4>By time of day (entry hour, Eastern)</h4>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th>Entry hour</th>
+              <th class="num" title="Number of trades entered in this hour">Trades</th>
+              <th class="num" title="Share of trades that made money after costs">Win %</th>
+              <th class="num" title="Average result per trade if trading were free">Before costs</th>
+              <th class="num" title="Average result per trade after costs">After costs</th>
+              <th class="num" title="Profit or loss in dollars after costs">P&amp;L</th>
+            </tr></thead>
+            <tbody id="sp-byhour"></tbody>
+          </table>
+        </div>
+        <p class="hint dt-ex">When the trade was entered. Setups often work in the first hour, when volume is high, and fade through the midday lull. If only one row is positive, trade only that window (the "Skip the midday lull" option is a start).</p>
 
         <h4>How trades ended</h4>
         <div class="table-wrap">

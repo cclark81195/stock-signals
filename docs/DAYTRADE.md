@@ -112,3 +112,15 @@ Sanity check used while building: on 150 random-walk stocks (no edge by construc
 - Taxes: short-term gains are taxed as ordinary income, and wash-sale rules apply to repeated trades.
 
 *Simulations on past prices are not predictions, and nothing here is financial advice.*
+
+## Swing Lab (`/swing.html`)
+
+A second research page for **multi-day trades on daily prices** (up to 10 years, every S&P 500 stock). It exists because the Day Trade Lab's real-data scan showed no edge before costs: day-trade stops average ~0.6% of price, so even small slippage costs ~0.06R per trade. On daily bars stops are ~3-5%, costs fall to a few hundredths of an R, and ten years spans several market regimes.
+
+- **Engine:** `lib/swing/engine.js`. Long only. Signal at the close, fill at the next open plus slippage. ATR-based stop (the distance is 1R); a day that trades through the stop exits at the stop (plus slippage), a day that opens beyond it exits at the open. One position per stock at a time. No peeking: a test checks that cutting off later data never changes closed trades.
+- **Strategies:** *Buy sharp dips* (close above the 200-day average and 2-day RSI under 10; sell above the 5-day average, after 10 days, or at the stop) and *Buy new highs* (close above the prior 55-day high; sell below the prior 20-day low or at the stop). Optional filters: stock above its 200-day average, SPY above its 200-day average.
+- **API:** `api/swing.js` returns addable per-stock totals (same shape as the Day Trade Lab scan) plus a by-year split and buy-and-hold for reference. The page runs 25 stocks per request.
+- **Read it by year.** The by-year table is the most useful output: an edge that holds in 2018, 2020 and 2022 is believable; one that comes from a single year is not.
+- **Known biases:** the stock list is today's S&P 500 (survivorship bias flatters long-only results); Yahoo prices are split-adjusted but not dividend-adjusted. Historical P/E is not available from Yahoo (only today's), so valuation is deliberately not used: back-testing it would use information that was unknown at the time.
+- **Day Trade Lab addition:** the S&P 500 scan now has a *By time of day* table (entry hour, Eastern) so you can see whether any window earns its costs.
+- Not yet verified on real Yahoo data from the build environment (it is blocked there); the first real run is the user's.
