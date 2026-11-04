@@ -16,7 +16,7 @@ const FIELDS = { strategy: "s-strategy", years: "s-years", dollars: "s-dollars",
 const CHECKS = { trend: "s-trend", mkt: "s-mkt" };
 const SW_BATCH = 25, SW_PARALLEL = 2;
 
-const sw = { stocks: [], rows: new Map(), failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, dollars: 100 };
+const sw = { stocks: [], rows: new Map(), dailyPnl: {}, bench: null, benchErr: false, failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, dollars: 100 };
 
 function loadSettings() {
   let saved = null;
@@ -104,11 +104,83 @@ function renderDiag(rows, all) {
     tile("Buy & hold", `${sgn(d.holdPctSum / rows.length, 0)}%`, "average stock, whole download", "", "What simply buying each stock at the start and holding it would have returned, for comparison. Today's S&P 500 members only, so it is flattered by survivorship."),
   ].join("");
 
-  const years = Object.entries(d.byYear).sort((a, b) => a[0].localeCompare(b[0]));
-  $("sw-years").innerHTML = years.map(([y, v]) => `<tr><td>${esc(y)}</td><td class="num">${v.trades}</td><td class="num">${pct0(v.wins / v.trades)}</td>
-      <td class="num ${cls(v.sumNetR)}">${sgn(v.sumNetR / v.trades)}R</td><td class="num ${cls(v.pnl)}">${money(v.pnl)}</td></tr>`).join("");
+  const vsYears = new Map((sw.vs?.years || []).map((y) => [y.year, y]));
+  const yearKeys = [...new Set([...Object.keys(d.byYear), ...vsYears.keys()])].sort();
+  $("sw-years").innerHTML = yearKeys.map((y) => {
+    const v = d.byYear[y], r = vsYears.get(y);
+    const part = r?.part ? ` <span class="hint">(part year)</span>` : "";
+    return `<tr><td>${esc(y)}${part}</td><td class="num">${v ? v.trades : 0}</td><td class="num">${v ? pct0(v.wins / v.trades) : "-"}</td>
+      <td class="num ${cls(v?.sumNetR)}">${v ? sgn(v.sumNetR / v.trades) + "R" : "-"}</td><td class="num ${cls(v?.pnl)}">${v ? money(v.pnl) : "-"}</td>
+      <td class="num ${cls(r?.strat)}">${r ? pctFmt(r.strat) : "-"}</td><td class="num ${cls(r?.spy)}">${r ? pctFmt(r.spy) : "-"}</td></tr>`;
+  }).join("");
   const exits = Object.entries(d.byExit).sort((a, b) => b[1].trades - a[1].trades);
   $("sw-exits").innerHTML = exits.map(([k, e]) => `<tr><td>${esc(EXIT_NAMES[k] || k)}</td><td class="num">${e.trades}</td><td class="num">${pct0(e.trades / n)}</td><td class="num ${cls(e.sumNetR)}">${sgn(e.sumNetR / e.trades)}R</td></tr>`).join("");
+}
+
+// ---------------------------------------------------------------- strategy vs the S&P 500
+const pctFmt = (x, d = 2) => (x == null ? "-" : `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x * 100).toFixed(d)}%`);
+const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
+
+/** Day-by-day and calendar-year returns of the strategy (one slot of money per stock tested) and of SPY. */
+function computeVs(rows) {
+  if (!sw.bench || !sw.bench.length || !rows.length) return null;
+  const start = rows.map((r) => r.testStart).filter(Boolean).sort()[0];
+  if (!start) return null;
+  const capital = rows.length * sw.dollars;
+  const days = [];
+  for (let i = 1; i < sw.bench.length; i++) {
+    const [date, c] = sw.bench[i];
+    if (date < start) continue;
+    days.push({ date, spy: c / sw.bench[i - 1][1] - 1, strat: (sw.dailyPnl[date] || 0) / capital, c });
+  }
+  if (days.length < 20) return null;
+  const years = new Map();
+  const i0 = Math.max(1, sw.bench.findIndex(([d]) => d >= start));
+  const baseClose = sw.bench[i0 - 1][1];                    // the close just before the first tested day
+  let prevClose = baseClose;
+  for (const d of days) {
+    const y = d.date.slice(0, 4);
+    const e = years.get(y) || { strat: 0, firstDate: d.date, lastDate: d.date, openClose: prevClose, closeC: d.c };
+    e.strat += d.strat; e.lastDate = d.date; e.closeC = d.c;
+    years.set(y, e); prevClose = d.c;
+  }
+  const yr = [...years.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([y, e]) => ({
+    year: y, strat: e.strat, spy: e.closeC / e.openClose - 1,
+    part: e.firstDate.slice(5) > "01-10" || e.lastDate.slice(5) < "12-20",
+  }));
+  const full = yr.filter((y) => !y.part);
+  const basis = full.length >= 2 ? full : yr;
+  const totalStrat = days.reduce((s, d) => s + d.strat, 0);
+  const totalSpy = days[days.length - 1].c / baseClose - 1;
+  const span = days.length / 252;
+  const cagr = (t) => (1 + t > 0 ? Math.pow(1 + t, 1 / span) - 1 : -1);
+  return {
+    years: yr, usedFull: basis === full, nYears: basis.length, span, start, end: days[days.length - 1].date, capital,
+    avgAnnualStrat: mean(basis.map((y) => y.strat)), avgAnnualSpy: mean(basis.map((y) => y.spy)),
+    avgDailyStrat: mean(days.map((d) => d.strat)), avgDailySpy: mean(days.map((d) => d.spy)),
+    totalStrat, totalSpy, cagrStrat: cagr(totalStrat), cagrSpy: cagr(totalSpy),
+  };
+}
+
+function renderVs(rows) {
+  const v = computeVs(rows);
+  sw.vs = v;
+  const box = $("sw-vs");
+  if (!v) {
+    box.hidden = !sw.benchErr;
+    $("sw-vs-tiles").innerHTML = "";
+    $("sw-vs-note").textContent = sw.benchErr ? "The S&P 500 prices could not be loaded, so the comparison is unavailable. Run the test again to retry." : "";
+    return;
+  }
+  box.hidden = false;
+  const diff = (a, b) => (a == null || b == null ? "" : `${a - b >= 0 ? "ahead of" : "behind"} the S&P 500 by ${Math.abs((a - b) * 100).toFixed(2)} points`);
+  $("sw-vs-tiles").innerHTML = [
+    tile("Average annual return", pctFmt(v.avgAnnualStrat), `S&P 500: ${pctFmt(v.avgAnnualSpy)}`, cls(v.avgAnnualStrat), `Average of ${v.nYears} ${v.usedFull ? "full " : ""}calendar year${v.nYears === 1 ? "" : "s"}. ${diff(v.avgAnnualStrat, v.avgAnnualSpy)}. The strategy's money is mostly idle, so this is the return on all of it, not only the part that was invested.`),
+    tile("Average daily return", pctFmt(v.avgDailyStrat, 3), `S&P 500: ${pctFmt(v.avgDailySpy, 3)}`, cls(v.avgDailyStrat), "The average return per trading day over the whole window. Multiply by about 252 for a rough yearly figure."),
+    tile("Compound growth per year", pctFmt(v.cagrStrat), `S&P 500: ${pctFmt(v.cagrSpy)}`, cls(v.cagrStrat), "The whole window's total return turned into a steady yearly rate, which handles part years correctly."),
+    tile("Total return", pctFmt(v.totalStrat, 1), `S&P 500: ${pctFmt(v.totalSpy, 1)}`, cls(v.totalStrat), `Over ${v.span.toFixed(1)} years, ${v.start} to ${v.end}.`),
+  ].join("");
+  $("sw-vs-note").textContent = `Strategy: ${money(v.capital)} set aside (one $${sw.dollars} slot per stock), idle cash earning nothing. S&P 500: SPY price only.`;
 }
 
 function renderCurve(curve) {
@@ -177,6 +249,7 @@ function render(final = false) {
   if (!rows.length) { $("sw-results").hidden = true; return; }
   $("sw-results").hidden = false;
   const all = sum(rows), first = sum(rows, "first"), second = sum(rows, "second");
+  if (final) renderVs(rows);
   renderTiles(rows, all, first, second);
   renderDiag(rows, all);
 
@@ -227,7 +300,9 @@ async function run(only = null) {
   const universe = typed.length ? typed : sw.stocks.map((x) => x.symbol);
   if (!universe.length) { $("sw-status").className = "status error"; $("sw-status").textContent = "The stock list has not loaded yet. Type some symbols above or reload the page."; return; }
   const symbols = only || universe;
-  if (!only) sw.rows.clear();
+  if (!only) { sw.rows.clear(); sw.dailyPnl = {}; }
+  sw.bench = null; sw.benchErr = false; sw.vs = null;
+  const benchP = fetch(`/api/swing?bench=1&years=${encodeURIComponent(s.years)}`).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || r.status); sw.bench = d.bench; })).catch(() => { sw.benchErr = true; });
   sw.failed = []; sw.running = true; sw.cancel = false;
   sw.dollars = Number(s.dollars) || 100;
   $("sw-used").textContent = settingsNote(s);
@@ -250,6 +325,7 @@ async function run(only = null) {
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
         (data.warnings || []).forEach((w) => warnings.add(w));
+        for (const [dt, v] of Object.entries(data.dailyPnl || {})) sw.dailyPnl[dt] = (sw.dailyPnl[dt] || 0) + v;
         for (const row of data.symbols || []) { if (row.error || !row.all) sw.failed.push(row.symbol); else sw.rows.set(row.symbol, row); }
       } catch (e) {
         lastErr = e.message || String(e);
@@ -260,7 +336,7 @@ async function run(only = null) {
       render();
     }
   };
-  await Promise.all(Array.from({ length: SW_PARALLEL }, worker));
+  await Promise.all([benchP, ...Array.from({ length: SW_PARALLEL }, worker)]);
 
   const stopped = sw.cancel;
   sw.running = false;

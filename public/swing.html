@@ -18,8 +18,6 @@
       <img class="logo" src="logo.png" width="76" height="56" alt="FFS Global" />
       <span>Swing Lab</span>
     </div>
-    <a class="dt-link" href="/">&larr; Index scanner</a>
-    <a class="dt-link" href="daytrade.html">Day Trade Lab</a>
     <p class="updated" id="sw-updated" role="status">Not run yet</p>
   </header>
 
@@ -123,6 +121,13 @@
         <h3>Where the money is going</h3>
         <div class="dt-tiles" id="sw-diag"></div>
 
+        <div id="sw-vs" hidden>
+          <h3>Versus the S&amp;P 500</h3>
+          <div class="dt-tiles" id="sw-vs-tiles"></div>
+          <p class="hint" id="sw-vs-note"></p>
+          <p class="hint dt-ex">How this is worked out: every stock tested gets its own "slot" of the dollars-per-buy amount, so the strategy's money is (stocks tested &times; dollars per buy). Each day the open trades are valued at that day's close, and the day's profit or loss divided by that money is the strategy's return for the day. Days with nothing invested earn nothing (cash is assumed idle), and nothing is compounded. The S&amp;P 500 is SPY's daily change over the same days, price only (no dividends, which the strategy does not collect either). "Average annual" is the average of the full calendar years in the window; "Compound growth" turns the whole window's total into a yearly rate. A strategy that is invested only part of the time can trail the index in total and still be worth having if it is much steadier, but it has to beat the index to be worth the effort on its own.</p>
+        </div>
+
         <h4>Year by year</h4>
         <div class="table-wrap">
           <table class="stocks dt-table">
@@ -132,11 +137,13 @@
               <th class="num" title="Share of trades that made money after costs">Win %</th>
               <th class="num" title="Average result per trade after costs, in R">Net R / trade</th>
               <th class="num" title="Profit or loss in dollars after costs">P&amp;L</th>
+              <th class="num" title="Calendar-year profit or loss divided by all the money set aside (one slot per stock tested)">Strategy return</th>
+              <th class="num" title="SPY's price change over the same calendar year">S&amp;P 500</th>
             </tr></thead>
             <tbody id="sw-years"></tbody>
           </table>
         </div>
-        <p class="hint dt-ex">The most important table on this page. A strategy that makes money in most years, including the bad ones (2020 and 2022 are in the 10-year window), is much more believable than one whose total comes from a single good year.</p>
+        <p class="hint dt-ex">The most important table on this page. A strategy that makes money in most years, including the bad ones (2020 and 2022 are in the 10-year window), is much more believable than one whose total comes from a single good year. The last two columns compare each calendar year with the S&amp;P 500 (the first and last years may be part years).</p>
 
         <h4>How trades ended</h4>
         <div class="table-wrap">
@@ -235,5 +242,6 @@
     Prices from Yahoo Finance. Backtests are simulations on past prices, not predictions, and nothing here is financial advice.
   </footer>
   <script type="module" src="swing.js"></script>
+  <script src="nav.js" defer></script>
 </body>
 </html>

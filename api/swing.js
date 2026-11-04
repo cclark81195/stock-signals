@@ -33,6 +33,18 @@ export default async function handler(req, res) {
   const years = Number(q.years) <= 5 ? 5 : 10;
 
   const warnings = [];
+  // ?bench=1 : just SPY's daily closes, for the page's comparison with the S&P 500
+  if (q.bench === "1") {
+    try {
+      const spy = toDaily(await fetchChart("SPY", `${years}y`, "1d"));
+      res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
+      res.status(200).json({ bench: spy.map((b) => [b.date, Math.round(b.c * 10000) / 10000]) });
+    } catch (e) {
+      res.setHeader("Cache-Control", "no-store");
+      res.status(502).json({ error: String(e?.message || e) });
+    }
+    return;
+  }
   try {
     let marketOk = null;
     if (cfg.marketFilter) {
@@ -42,27 +54,38 @@ export default async function handler(req, res) {
     const results = await mapLimit(symbols, 5, async (symbol) => {
       const bars = toDaily(await fetchChart(symbol, `${years}y`, "1d"));
       if (bars.length < 260) throw new Error("Not enough price history");
-      const { trades, daysTested } = backtestDaily(symbol, bars, cfg, marketOk);
+      const { trades, daily, daysTested, testStart } = backtestDaily(symbol, bars, cfg, marketOk);
       const tested = bars.slice(200);
       const splitDate = tested.length ? tested[Math.floor(tested.length / 2)].date : null;
       const first = bars[0].c, last = bars[bars.length - 1].c;
       return {
-        symbol, days: daysTested, splitDate,
+        symbol, days: daysTested, splitDate, testStart,
         holdPct: Math.round(((last / first) - 1) * 1000) / 10, // buy-and-hold over the whole download, for reference
         all: swingStats(trades),
         first: compactStats(trades.filter((t) => t.date < splitDate)),
         second: compactStats(trades.filter((t) => t.date >= splitDate)),
+        daily,
         trades: trades.map((t) => ({
           symbol: t.symbol, date: t.date, exitDate: t.exitDate, entry: t.entry, exit: t.exit, shares: t.shares,
           exitReason: t.exitReason, holdBars: t.holdBars, netR: t.netR, pnl: t.pnl, exitTime: t.exitTime,
         })),
       };
     });
+    // One summed day-by-day P&L per request (the page adds the requests together), not one per stock.
+    const dailyPnl = {};
+    const symbolRows = results.map((r, i) => {
+      if (!r.ok) return { symbol: symbols[i], error: String(r.error?.message || r.error) };
+      const { daily, ...rest } = r.value;
+      for (const [d, v] of Object.entries(daily)) dailyPnl[d] = (dailyPnl[d] || 0) + v;
+      return rest;
+    });
+    for (const d of Object.keys(dailyPnl)) dailyPnl[d] = Math.round(dailyPnl[d] * 100) / 100;
     res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
     res.status(200).json({
       generatedAt: Math.floor(Date.now() / 1000), warnings, years,
       config: { ...cfg },
-      symbols: results.map((r, i) => (r.ok ? r.value : { symbol: symbols[i], error: String(r.error?.message || r.error) })),
+      dailyPnl,
+      symbols: symbolRows,
     });
   } catch (e) {
     res.setHeader("Cache-Control", "no-store");

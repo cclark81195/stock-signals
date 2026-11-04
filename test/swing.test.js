@@ -126,3 +126,19 @@ test("toDaily drops bad rows and aboveSma200Map flags the trend", () => {
   const m = aboveSma200Map(mk(ramp(260)));
   assert.equal([...m.values()].every(Boolean), true);
 });
+
+test("daily mark-to-market P&L adds up exactly to the trades' P&L, including slippage", () => {
+  const top = ramp(250)[249];
+  const closes = [...ramp(250), top - 3, top - 6, top - 1, top + 2, top + 3, ...ramp(30, top, 0.3), top - 20, top - 25, top - 30, top - 6, top - 8, top - 9];
+  for (const slippageBps of [0, 10]) {
+    const { trades, daily, testStart } = backtestDaily("X", mk(closes), cfgOf({ slippageBps, meanrev: { maxHold: 40 } }));
+    assert.ok(trades.length >= 1);
+    const fromTrades = trades.reduce((s, t) => s + t.pnl, 0);
+    const fromDays = Object.values(daily).reduce((s, v) => s + v, 0);
+    assert.ok(Math.abs(fromTrades - fromDays) < 0.01, `${fromTrades} vs ${fromDays}`);
+    assert.equal(testStart, mk(closes)[200].date);
+  }
+  // a day with no position books nothing
+  const t = backtestDaily("X", mk(ramp(260)), cfgOf());
+  assert.deepEqual(t.daily, {});
+});
