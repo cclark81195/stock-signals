@@ -49,6 +49,10 @@
         </select>
         <span class="help dt-ex" id="h-years">How far back to test. The first 200 days are used to warm up the averages, so the test starts about 10 months after the first day downloaded.</span>
       </label>
+      <label>Starting balance ($)
+        <input id="s-balance" type="number" min="0" step="500" value="10000" inputmode="numeric" aria-describedby="h-balance" />
+        <span class="help dt-ex" id="h-balance">The money in your account, used for the comparison with the S&amp;P 500. The account can only hold (balance &divide; dollars per buy) positions at once, so when more signals appear than that, the extras are skipped. Changing it updates the comparison without re-running the test. Leave it blank or 0 for unlimited cash: every signal is taken and each stock tested gets its own slot.</span>
+      </label>
       <label>Dollars per buy ($)
         <input id="s-dollars" type="number" min="1" step="1" value="100" inputmode="decimal" aria-describedby="h-dollars" />
         <span class="help dt-ex" id="h-dollars">Spend this fixed amount on every buy, using fractional shares. It only changes the dollar figures; the R figures do not depend on it.</span>
@@ -125,7 +129,12 @@
           <h3>Versus the S&amp;P 500</h3>
           <div class="dt-tiles" id="sw-vs-tiles"></div>
           <p class="hint" id="sw-vs-note"></p>
-          <p class="hint dt-ex">How this is worked out: every stock tested gets its own "slot" of the dollars-per-buy amount, so the strategy's money is (stocks tested &times; dollars per buy). Each day the open trades are valued at that day's close, and the day's profit or loss divided by that money is the strategy's return for the day. Days with nothing invested earn nothing (cash is assumed idle), and nothing is compounded. The S&amp;P 500 is SPY's daily change over the same days, price only (no dividends, which the strategy does not collect either). "Average annual" is the average of the full calendar years in the window; "Compound growth" turns the whole window's total into a yearly rate. A strategy that is invested only part of the time can trail the index in total and still be worth having if it is much steadier, but it has to beat the index to be worth the effort on its own.</p>
+          <div class="dt-chart-card" id="sw-acctcard" hidden>
+            <div class="dt-chart-title">Account balance vs the same money in the S&amp;P 500 <span class="hint" id="sw-acct-note"></span></div>
+            <div id="sw-acct"></div>
+            <p class="dt-ballegend"><span><i class="lg ln"></i> This strategy (profit counted when sold)</span> <span><i class="lg ln sp"></i> S&amp;P 500 (SPY, price only)</span></p>
+          </div>
+          <p class="hint dt-ex">How this is worked out. <strong>With a starting balance:</strong> one account replays every trade in date order and only takes a buy when it has the cash; profit or loss is counted when a trade is sold, so a position still open does not move the balance, and the daily return is the balance's change from one day to the next. <strong>Without one:</strong> every stock tested gets its own "slot" of the dollars-per-buy amount, so the strategy's money is (stocks tested &times; dollars per buy). Each day the open trades are valued at that day's close, and the day's profit or loss divided by that money is the strategy's return for the day. Days with nothing invested earn nothing (cash is assumed idle), and nothing is compounded. The S&amp;P 500 is SPY's daily change over the same days, price only (no dividends, which the strategy does not collect either). "Average annual" is the average of the full calendar years in the window; "Compound growth" turns the whole window's total into a yearly rate. A strategy that is invested only part of the time can trail the index in total and still be worth having if it is much steadier, but it has to beat the index to be worth the effort on its own.</p>
         </div>
 
         <h4>Year by year</h4>

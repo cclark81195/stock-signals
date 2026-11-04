@@ -142,3 +142,41 @@ test("daily mark-to-market P&L adds up exactly to the trades' P&L, including sli
   const t = backtestDaily("X", mk(ramp(260)), cfgOf());
   assert.deepEqual(t.daily, {});
 });
+
+import { replayAccount } from "../public/swing-account.js";
+const row = (symbol, list) => ({ symbol, trades: list.map(([date, exitDate, pnl]) => ({ symbol, date, exitDate, pnl })) });
+const days = ["d1", "d2", "d3", "d4", "d5"];
+
+test("account replay: realised profit is added when a trade is sold, and cash is returned", () => {
+  const r = replayAccount([row("A", [["d1", "d3", 10]])], 1000, 100, days);
+  assert.deepEqual(r.equity, [1000, 1000, 1010, 1010, 1010]);
+  assert.equal(r.taken, 1); assert.equal(r.skipped, 0);
+});
+
+test("account replay: with $200 and $100 buys only two positions fit; the rest are skipped, not queued", () => {
+  const rows = [row("A", [["d1", "d4", 5]]), row("B", [["d1", "d4", 5]]), row("C", [["d1", "d4", 5]]), row("D", [["d2", "d3", 7]])];
+  const r = replayAccount(rows, 200, 100, days);
+  assert.equal(r.taken, 2); assert.equal(r.skipped, 2); assert.equal(r.maxOpen, 2);
+  assert.ok(r.equity[4] > 200 && r.equity[4] <= 210);
+});
+
+test("account replay: cash freed on a sale is reusable the same day, and same-day round trips work", () => {
+  const rows = [row("A", [["d1", "d2", 20]]), row("B", [["d2", "d4", -10]]), row("C", [["d3", "d3", 3]])];
+  const r = replayAccount(rows, 100, 100, days);            // only one position at a time
+  assert.equal(r.taken, 2); assert.equal(r.skipped, 1);     // A sells on d2 and B buys with that cash the same day; C finds B still holding it
+  assert.equal(r.equity[1], 120);
+  const same = replayAccount([row("S", [["d2", "d2", 4]])], 100, 100, days);   // bought and sold on one day
+  assert.deepEqual(same.equity, [100, 104, 104, 104, 104]);
+});
+
+test("account replay: the balance never goes below what the realised losses allow, and matches the sum of taken trades", () => {
+  const rows = [row("A", [["d1", "d2", -30], ["d3", "d4", 50]]), row("B", [["d1", "d5", 20]])];
+  const r = replayAccount(rows, 1000, 100, days);
+  assert.equal(r.skipped, 0);
+  assert.equal(r.equity[4], 1000 - 30 + 50 + 20);
+});
+
+test("account replay: a buy bigger than the balance is never taken", () => {
+  const r = replayAccount([row("A", [["d1", "d2", 5]])], 50, 100, days);
+  assert.equal(r.taken, 0); assert.equal(r.skipped, 1); assert.deepEqual(r.equity, [50, 50, 50, 50, 50]);
+});
