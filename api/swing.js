@@ -1,5 +1,5 @@
 // GET /api/swing?symbols=AAPL,MSFT&strategy=meanrev|breakout&years=10&dollars=100&slipBps=5&stopAtr=3&trend=1&mkt=0
-//   &rsiBuy=10&exitSma=5&hold=10 (mean reversion)  &entryLen=55&exitLen=20 (breakout)
+//   &rsiBuy=10&exitSma=5&hold=10 (mean reversion)  &entryLen=55&exitLen=20 (breakout)  strategy=bollinger&bbLen=20&bbK=2&bbEntry=below|reclaim&bbExit=mid|half|upper&hold=10
 // Swing Lab: backtests daily-bar, multi-day strategies over up to 10 years. Research only; places no orders.
 // Returns compact, ADDABLE per-symbol totals (like the Day Trade Lab scan) so the page can merge many stocks.
 import { fetchChart, mapLimit } from "../lib/yahoo.js";
@@ -19,17 +19,23 @@ export default async function handler(req, res) {
   if (!symbols.length) { res.status(400).json({ error: "No valid symbols" }); return; }
 
   const cfg = makeConfig({
-    strategy: q.strategy === "breakout" ? "breakout" : "meanrev",
+    strategy: q.strategy === "breakout" ? "breakout" : q.strategy === "bollinger" ? "bollinger" : "meanrev",
     dollars: clamp(q.dollars, 1, 1_000_000),
     slippageBps: clamp(q.slipBps, 0, 50),
     stopAtr: clamp(q.stopAtr, 0.5, 10),
     trendFilter: flag(q.trend),
     marketFilter: flag(q.mkt),
     meanrev: { rsiBuy: clamp(q.rsiBuy, 1, 50), exitSma: Math.round(clamp(q.exitSma, 2, 50) ?? 5) || undefined, maxHold: Math.round(clamp(q.hold, 0, 60) ?? 10) },
+    bollinger: {
+      len: Math.round(clamp(q.bbLen, 5, 100) ?? 20), k: clamp(q.bbK, 0.5, 4) ?? 2,
+      entry: q.bbEntry === "reclaim" ? "reclaim" : "below",
+      exitFrac: q.bbExit === "upper" ? 1 : q.bbExit === "half" ? 0.5 : 0,
+      maxHold: Math.round(clamp(q.hold, 0, 500) ?? 10),
+    },
     breakout: { entryLen: Math.round(clamp(q.entryLen, 10, 200) ?? 55), exitLen: Math.round(clamp(q.exitLen, 5, 100) ?? 20), maxHold: Math.round(clamp(q.hold, 0, 500) ?? 0) },
   });
   // one "hold" box serves both strategies, with different defaults
-  if (q.hold === undefined || q.hold === "") { cfg.meanrev.maxHold = 10; cfg.breakout.maxHold = 0; }
+  if (q.hold === undefined || q.hold === "") { cfg.meanrev.maxHold = 10; cfg.breakout.maxHold = 0; cfg.bollinger.maxHold = 10; }
   const years = Number(q.years) <= 5 ? 5 : 10;
 
   const warnings = [];
