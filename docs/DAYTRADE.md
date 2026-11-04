@@ -51,6 +51,14 @@ A live loop also needs somewhere to run. Vercel functions are short-lived, so us
 3. **Tiny live size** in the ring-fenced account, with a hard daily loss cap, for weeks.
 4. **Scale only if** net expectancy stays positive after real fills and costs.
 
+## Choosing symbols and crypto
+
+The symbol box is a searchable multi-select (up to 10 per run). `api/daytrade-symbols.js` supplies the options: SPY, every S&P 500 stock from the same live list the scanner uses, and the five largest non-stablecoin cryptocurrencies (BTC, ETH, BNB, XRP, SOL, as Yahoo `-USD` symbols).
+
+Crypto uses its own profile in `lib/daytrade/markets.js`: sessions are UTC days (VWAP and the opening range start at 00:00 UTC, everything is flat by 23:45 UTC), sizes are fractional, and slippage is a separate, higher input (default 10 bps). Stock and crypto results are reported separately.
+
+Treat crypto as experimental: the rules are the stock rules re-timed and have not been tuned, Yahoo's 5-minute crypto history has not been checked against real data, real exchange costs may be well above 10 bps, and the Robinhood MCP is reportedly equities-only, so crypto here is research only.
+
 ## Known limits
 
 - Each symbol is backtested independently; the live guard is portfolio-wide, so the real bot will trade less than the backtest implies.

@@ -29,16 +29,55 @@
     </p>
 
     <form class="dt-controls" id="dt-form" autocomplete="off">
-      <label>Account size ($)<input id="f-equity" type="number" min="500" step="500" value="10000" inputmode="numeric" /></label>
-      <label>Risk per trade (%)<input id="f-risk" type="number" min="0.05" max="2" step="0.05" value="0.5" inputmode="decimal" /></label>
-      <label>Profit target (R)<input id="f-target" type="number" min="0.5" max="5" step="0.5" value="2" inputmode="decimal" /></label>
-      <label>Slippage (bps/side)<input id="f-slip" type="number" min="0" max="30" step="0.5" value="2" inputmode="decimal" /></label>
-      <label class="wide">Symbols (comma separated, max 10)<input id="f-symbols" type="text" value="SPY,QQQ,IWM,DIA,AAPL,MSFT,NVDA,TSLA" spellcheck="false" /></label>
+      <label>Account size ($)
+        <input id="f-equity" type="number" min="500" step="500" value="10000" inputmode="numeric" aria-describedby="h-equity" />
+        <span class="help" id="h-equity">The money the bot is allowed to trade. It decides how many shares each trade can use. Use the amount you would put in a separate trading account.</span>
+      </label>
+      <label>Risk per trade (%)
+        <input id="f-risk" type="number" min="0.05" max="2" step="0.05" value="0.5" inputmode="decimal" aria-describedby="h-risk" />
+        <span class="help" id="h-risk">The most you lose if a trade hits its stop, as a share of the account. 0.5% of $10,000 is $50. The further away the stop, the fewer shares it buys. Range 0.05 to 2.</span>
+      </label>
+      <label>Profit target (R)
+        <input id="f-target" type="number" min="0.5" max="5" step="0.5" value="2" inputmode="decimal" aria-describedby="h-target" />
+        <span class="help" id="h-target">Where to take profit, as a multiple of the risk. 2 means aiming to make twice what you risk. Higher targets are hit less often. Range 0.5 to 5.</span>
+      </label>
+      <label>Slippage (bps/side)
+        <input id="f-slip" type="number" min="0" max="30" step="0.5" value="2" inputmode="decimal" aria-describedby="h-slip" />
+        <span class="help" id="h-slip">The cost of imperfect fills, charged on every buy and sell. 1 bp is 0.01%, so 2 bps is about 2 cents on a $100 stock. Use more for thinly traded stocks. Range 0 to 30.</span>
+      </label>
+      <label>Crypto slippage (bps/side)
+        <input id="f-cslip" type="number" min="0" max="100" step="1" value="10" inputmode="decimal" aria-describedby="h-cslip" />
+        <span class="help" id="h-cslip">The same cost, for crypto only. Crypto trading costs are usually much higher than for stocks, so check what your platform really charges and set this to match. Range 0 to 100.</span>
+      </label>
+
+      <div class="wide dt-field">
+        <label for="f-search" class="dt-field-label">Symbols <span class="dt-count" id="f-count">(0 of 10)</span></label>
+        <div class="dt-picker" id="picker">
+          <div class="dt-chips" id="chips"></div>
+          <input id="f-search" type="text" role="combobox" aria-expanded="false" aria-controls="f-list" aria-autocomplete="list"
+            placeholder="Search S&amp;P 500 stocks, SPY or crypto..." autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="h-symbols" />
+          <ul class="dt-list" id="f-list" role="listbox" aria-label="Matching symbols" hidden></ul>
+        </div>
+        <div class="dt-quick">
+          <button type="button" id="q-crypto" class="dt-mini">+ Top 5 crypto</button>
+          <button type="button" id="q-clear" class="dt-mini">Clear all</button>
+          <span class="help" id="f-loaded"></span>
+          <span class="help dt-note" id="f-note" role="status"></span>
+        </div>
+        <span class="help" id="h-symbols">Pick up to 10. Every S&amp;P 500 stock is available, plus SPY (the S&amp;P 500 index fund) and the five biggest cryptocurrencies other than stablecoins: Bitcoin, Ethereum, BNB, XRP and Solana. Very heavily traded names work best, because tight bid-ask spreads are what keep small edges alive.</span>
+      </div>
       <div class="dt-setups" role="group" aria-label="Setups">
-        <label class="check"><input type="checkbox" id="f-orb" checked /> Opening-range breakout</label>
-        <label class="check"><input type="checkbox" id="f-vwap" checked /> VWAP reclaim</label>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-orb" checked aria-describedby="h-orb" /> Opening-range breakout</label>
+          <span class="help" id="h-orb">Buys when price closes above the high of the first 15 minutes of trading (before 11:30 ET) on strong volume and above VWAP. The stop sits at the bottom of that opening range.</span>
+        </div>
+        <div class="dt-setup">
+          <label class="check"><input type="checkbox" id="f-vwap" checked aria-describedby="h-vwap" /> VWAP reclaim</label>
+          <span class="help" id="h-vwap">Buys when price climbs back above VWAP (the day's volume-weighted average price) after spending most of the last half hour below it. The stop sits just under the recent lows.</span>
+        </div>
       </div>
       <button type="submit" id="f-run" class="dt-run">Run backtest</button>
+      <p class="help dt-run-help">Runs the rules over about 60 days of 5-minute prices with the settings above. It takes a few seconds. Your settings are remembered on this device.</p>
     </form>
 
     <p class="status" id="dt-status" role="status"></p>
@@ -53,7 +92,8 @@
           <div class="dt-chart-title">Cumulative result, in R <span class="hint" id="dt-curve-note"></span></div>
           <div id="dt-curve"></div>
         </div>
-        <p class="hint">R is your risk on one trade: +2R means you made twice what you risked, &minus;1R means you lost exactly what you risked. "Before costs" ignores slippage, "after costs" includes it.</p>
+        <p class="hint">Each step on the line is one finished trade, in order, so a rising line means the rules made money and sharp drops are losing streaks. The dashed line is break-even.</p>
+        <p class="hint"><strong>R</strong> is the amount you risk on one trade: +2R means you made twice what you risked, &minus;1R means you lost exactly what you risked. "Before costs" ignores slippage; "after costs" includes it.</p>
       </section>
 
       <section aria-label="Today's setups">
@@ -62,12 +102,29 @@
         <div class="table-wrap">
           <table class="stocks dt-table">
             <thead><tr>
-              <th>Symbol</th><th>Status</th><th>Details</th>
-              <th class="num">Entry</th><th class="num">Stop</th><th class="num">Target</th><th class="num">Shares</th>
+              <th title="Ticker symbol">Symbol</th>
+              <th title="What the rules are doing right now for this symbol">Status</th>
+              <th title="Why, in plain English">Details</th>
+              <th class="num" title="Planned buy price, including slippage">Entry</th>
+              <th class="num" title="Exit price if the trade goes wrong">Stop</th>
+              <th class="num" title="Exit price to take profit">Target</th>
+              <th class="num" title="Number of shares (or units of crypto), sized so a stop-out loses about your chosen risk">Shares</th>
             </tr></thead>
             <tbody id="dt-scan"></tbody>
           </table>
         </div>
+        <details class="dt-guide">
+          <summary>What these columns and statuses mean</summary>
+          <dl>
+            <dt>Status</dt>
+            <dd><strong>Signal:</strong> a setup just triggered on the last finished 5-minute bar, and the Entry, Stop, Target and Shares show the plan. <strong>In trade:</strong> a simulated position is still open. <strong>Traded:</strong> the rules already took and closed trades in this session. <strong>Waiting:</strong> the opening range is still forming. <strong>No setup:</strong> nothing has triggered. <strong>No data / Error:</strong> prices could not be loaded for this symbol.</dd>
+            <dt>Details</dt><dd>A plain-English reason for the status, such as which setup fired and why.</dd>
+            <dt>Entry</dt><dd>The planned buy price, after slippage. A signal is read when a bar closes, and the buy happens at the next bar's open, so the real price can differ a little.</dd>
+            <dt>Stop</dt><dd>The price where the trade is closed at a loss. Placed before entering, so the most you can lose is known in advance.</dd>
+            <dt>Target</dt><dd>The price where the trade is closed at a profit: the entry plus your chosen multiple of the risk.</dd>
+            <dt>Shares</dt><dd>How many shares the plan buys, or how many units for crypto, which can be a fraction such as 0.0123. It is your risk amount divided by the distance from Entry to Stop, capped so the position never exceeds your account size.</dd>
+          </dl>
+        </details>
       </section>
 
       <section aria-label="By symbol">
@@ -75,12 +132,43 @@
         <div class="table-wrap">
           <table class="stocks dt-table">
             <thead><tr>
-              <th>Symbol</th><th class="num">Trades</th><th class="num">Win %</th>
+              <th title="Ticker symbol">Symbol</th>
+              <th class="num" title="Number of simulated trades">Trades</th>
+              <th class="num" title="Share of trades that made money after costs">Win %</th>
               <th class="num" title="Average result per trade after costs, in R">Net R / trade</th>
-              <th class="num" title="Gross wins divided by gross losses">Profit factor</th>
-              <th class="num">Total R</th><th class="num">Max drawdown</th>
+              <th class="num" title="Total won divided by total lost">Profit factor</th>
+              <th class="num" title="Sum of all trades after costs, in R">Total R</th>
+              <th class="num" title="Biggest drop from a peak in the running total, in R">Max drawdown</th>
             </tr></thead>
             <tbody id="dt-bysym"></tbody>
+          </table>
+        </div>
+        <details class="dt-guide">
+          <summary>What these columns mean</summary>
+          <dl>
+            <dt>Trades</dt><dd>How many simulated trades this symbol produced. Fewer than about 100 is too few to draw conclusions from.</dd>
+            <dt>Win %</dt><dd>The share of trades that made money after costs. A low win rate can still work if wins are bigger than losses.</dd>
+            <dt>Net R / trade</dt><dd>The average result of one trade after costs, in R. Positive means the rules made money on average. This is the most important column.</dd>
+            <dt>Profit factor</dt><dd>Total won divided by total lost. Above 1 means winners outweigh losers; below 1 means the rules lost money.</dd>
+            <dt>Total R</dt><dd>All trades added up, after costs, in R.</dd>
+            <dt>Max drawdown</dt><dd>The largest fall from a high point in the running total. It shows how deep a bad stretch got, so ask whether you could stick with the plan through it.</dd>
+          </dl>
+        </details>
+      </section>
+
+      <section aria-label="By asset class" id="dt-class-section" hidden>
+        <h2>Stocks vs crypto</h2>
+        <p class="hint">Stocks and crypto behave very differently, so their results are kept apart here. The summary at the top mixes them.</p>
+        <div class="table-wrap">
+          <table class="stocks dt-table">
+            <thead><tr>
+              <th title="Stocks (and SPY) or crypto">Group</th>
+              <th class="num" title="Number of simulated trades">Trades</th>
+              <th class="num" title="Share of trades that made money after costs">Win %</th>
+              <th class="num" title="Average result per trade after costs, in R">Net R / trade</th>
+              <th class="num" title="Sum of all trades after costs, in R">Total R</th>
+            </tr></thead>
+            <tbody id="dt-byclass"></tbody>
           </table>
         </div>
       </section>
@@ -89,10 +177,22 @@
         <h2>By setup</h2>
         <div class="table-wrap">
           <table class="stocks dt-table">
-            <thead><tr><th>Setup</th><th class="num">Trades</th><th class="num">Win %</th><th class="num">Total R</th></tr></thead>
+            <thead><tr>
+              <th title="Which entry rule produced the trade">Setup</th>
+              <th class="num" title="Number of simulated trades">Trades</th>
+              <th class="num" title="Share of trades that made money after costs">Win %</th>
+              <th class="num" title="Sum of all trades after costs, in R">Total R</th>
+            </tr></thead>
             <tbody id="dt-bysetup"></tbody>
           </table>
         </div>
+        <details class="dt-guide">
+          <summary>What this table shows</summary>
+          <dl>
+            <dt>Setup</dt><dd>The entry rule that opened the trade, so you can see which one is doing the work and which one is dragging results down.</dd>
+            <dt>Trades, Win %, Total R</dt><dd>The same measures as in the table above, grouped by setup instead of by symbol, across all symbols.</dd>
+          </dl>
+        </details>
       </section>
 
       <section aria-label="Recent trades">
@@ -100,12 +200,29 @@
         <div class="table-wrap">
           <table class="stocks dt-table">
             <thead><tr>
-              <th>When (ET)</th><th>Symbol</th><th>Setup</th><th class="num">Entry</th><th class="num">Exit</th>
-              <th>Exit reason</th><th class="num">Result</th><th class="num">P&amp;L</th>
+              <th title="When the trade was entered, Eastern time">When (ET)</th>
+              <th title="Ticker symbol">Symbol</th>
+              <th title="Which entry rule produced the trade">Setup</th>
+              <th class="num" title="Price paid per share, including slippage">Entry</th>
+              <th class="num" title="Price received per share, after slippage where it applies">Exit</th>
+              <th title="How the trade ended">Exit reason</th>
+              <th class="num" title="Result after costs, in R">Result</th>
+              <th class="num" title="Profit or loss in dollars after costs">P&amp;L</th>
             </tr></thead>
             <tbody id="dt-trades"></tbody>
           </table>
         </div>
+        <details class="dt-guide">
+          <summary>What these columns and exit reasons mean</summary>
+          <dl>
+            <dt>When (ET)</dt><dd>The day and time the trade was entered, in New York time.</dd>
+            <dt>Entry / Exit</dt><dd>The price per share paid and received. Both include slippage where it applies, so they are slightly worse than the raw market price.</dd>
+            <dt>Exit reason</dt>
+            <dd><strong>Target:</strong> price reached the profit target. <strong>Stop:</strong> price hit the stop. <strong>Gap through stop:</strong> price opened below the stop, so the exit was at the open and the loss is larger than planned. <strong>End-of-day close:</strong> still open at the cutoff (3:45 PM ET for stocks, 23:45 UTC for crypto), so it was closed. <strong>Session end:</strong> the data ended before the cutoff, such as on a half day.</dd>
+            <dt>Result</dt><dd>The outcome after costs in R. +2R is twice the amount risked; &minus;1R is a full loss of the amount risked. It can be a bit below &minus;1R after slippage or a gap.</dd>
+            <dt>P&amp;L</dt><dd>The same outcome in dollars for the shares traded, after costs.</dd>
+          </dl>
+        </details>
       </section>
     </div>
 
@@ -116,6 +233,7 @@
       <p><strong>Exits.</strong> A profit target at the chosen multiple of risk, the stop, or a flat-by time of 3:45 PM ET, whichever comes first. If one bar touches both stop and target, the test assumes the stop hit first.</p>
       <p><strong>Risk rules (the same ones a live bot would run).</strong> Each trade risks a fixed percentage of the account. The system stops for the day after 3 trades, after losing 2R, or after 2 losses in a row. Stops that are tighter than normal 5-minute noise, or wider than 1% of price, are skipped. No leverage by default.</p>
       <p><strong>Costs.</strong> Slippage is charged on every entry and stop or time exit. The gap between "before costs" and "after costs" shows how much of any edge trading costs would eat.</p>
+      <p><strong>Crypto (experimental).</strong> Crypto trades around the clock, so each day is a UTC day: VWAP and the opening range restart at 00:00 UTC. The opening range is the first hour, breakouts are only taken before 06:00 UTC, VWAP reclaims start at 01:00 UTC, and everything is closed by 23:45 UTC. Crypto trades on weekends, can be bought in fractions, and uses its own slippage setting. These are the stock rules re-timed, not separately tuned, and I have not checked how the data feed behaves for crypto, so treat those results as a first look only. The Robinhood connection planned for this project is described as covering stocks, so automating crypto would need a different route.</p>
       <p><strong>Limits of this test.</strong> Yahoo only provides about 60 days of 5-minute data, which is a few dozen trades per symbol. That is enough to catch bugs, not enough to prove an edge. Each symbol is tested on its own, so portfolio-wide limits are only approximated. Long only. Earnings days and FOMC/CPI days are not filtered out yet.</p>
     </details>
   </main>

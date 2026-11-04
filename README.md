@@ -83,11 +83,11 @@ P/E is shown for context only; it doesn't change the BUY / SELL / HOLD verdict.
 - **If prices stop loading:** Yahoo is either limiting requests (wait a few minutes) or has changed something on its side. The fix is usually a small update to `lib/yahoo.js`.
 
 ## Day Trade Lab (research only)
-`/daytrade.html` finds quick in-and-out setups (opening-range breakout, VWAP reclaim) and backtests them on the last ~60 days of 5-minute prices with costs included. It places no orders. See `docs/DAYTRADE.md` for the rules, the risk limits and the plan for connecting a broker. Run the tests with `npm test`.
+`/daytrade.html` finds quick in-and-out setups (opening-range breakout, VWAP reclaim) and backtests them on the last ~60 days of 5-minute prices with costs included. It places no orders. Pick up to 10 symbols from the S&P 500, SPY or the five largest cryptocurrencies (crypto is experimental). See `docs/DAYTRADE.md` for the rules, the risk limits and the plan for connecting a broker. Run the tests with `npm test`.
 
 ## Project layout
 - `public/` - the website itself (`index.html`, `styles.css`, `app.js`; Day Trade Lab: `daytrade.html`, `daytrade.css`, `daytrade.js`)
-- `api/` - server functions: `constituents` (index members), `quotes` (prices, P/E + verdicts), `chart` (trend chart data), `indicator-history` (the line behind each indicator's chart), `strategy` (per-stock plain-English strategy, headlines and next earnings date), `sector-pe` (sector average P/E), `daytrade` (Day Trade Lab setups and backtest)
+- `api/` - server functions: `constituents` (index members), `quotes` (prices, P/E + verdicts), `chart` (trend chart data), `indicator-history` (the line behind each indicator's chart), `strategy` (per-stock plain-English strategy, headlines and next earnings date), `sector-pe` (sector average P/E), `daytrade` (Day Trade Lab setups and backtest), `daytrade-symbols` (the Day Trade Lab symbol picker: SPY, S&P 500, top 5 crypto)
 - `lib/` - shared code: indicator math, Yahoo fetching, index member lists; `lib/daytrade/` holds the day-trading engine
 - `test/` - engine tests (`npm test`)
 

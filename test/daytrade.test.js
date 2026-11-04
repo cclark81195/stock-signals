@@ -8,6 +8,7 @@ import { buildPlan, RiskGuard, checkOrder } from "../lib/daytrade/risk.js";
 import { backtestSymbol, runSession, scanLatest, summarize } from "../lib/daytrade/backtest.js";
 import { decide, execute } from "../lib/daytrade/executor.js";
 import { DryRunBroker, RobinhoodMcpBroker } from "../lib/daytrade/broker.js";
+import { configFor, isCrypto, profileFor, CRYPTO } from "../lib/daytrade/markets.js";
 
 // ---- helpers: build a flat-ish day of 78 five-minute bars with scripted overrides ------
 const DAY0 = Date.UTC(2026, 0, 5, 14, 30) / 1000; // 9:30 ET in January (UTC-5) = 14:30 UTC
@@ -183,6 +184,100 @@ test("scanLatest ignores the 5-minute bar that is still forming", () => {
   const closed = scanLatest("TEST", sessions, c, today, t3 + 305);
   assert.equal(closed.state, "signal");
   assert.ok(closed.plan.stop < closed.plan.entry);
+});
+
+
+// ---- crypto (24/7, UTC-day sessions, fractional units) ---------------------------------
+const CRYPTO_DAY0 = Date.UTC(2026, 0, 5, 0, 0) / 1000; // 00:00 UTC
+function makeCryptoDay(dayIndex, base, script = {}) {
+  const t0 = CRYPTO_DAY0 + dayIndex * 86400;
+  const bars = { t: [], open: [], high: [], low: [], close: [], volume: [] };
+  let prev = base;
+  for (let i = 0; i < 288; i++) {
+    const s = script[i] || {};
+    const o = s.o ?? prev, c = s.c ?? o;
+    bars.t.push(t0 + i * 300);
+    bars.open.push(o); bars.close.push(c);
+    bars.high.push(s.h ?? Math.max(o, c) + 0.1);
+    bars.low.push(s.l ?? Math.min(o, c) - 0.1);
+    bars.volume.push(s.v ?? 1000);
+    prev = c;
+  }
+  return bars;
+}
+const cryptoSessions = (...days) => {
+  const p = profileFor("BTC-USD");
+  return toSessions(concat(...days), p.tz, p.minBars, p.openMin, p.closeMin);
+};
+
+test("crypto symbols are recognised and the picker's five are all crypto", () => {
+  assert.equal(isCrypto("BTC-USD"), true);
+  assert.equal(isCrypto("BRK-B"), false);
+  assert.equal(isCrypto("SPY"), false);
+  assert.equal(CRYPTO.length, 5);
+  assert.ok(CRYPTO.every((c) => isCrypto(c.symbol)));
+});
+
+test("configFor leaves stocks alone and re-times crypto", () => {
+  const base = makeConfig({});
+  const stock = configFor(base, "AAPL", 10);
+  assert.equal(stock.flattenMin, base.flattenMin);
+  assert.equal(stock.slippageBps, base.slippageBps);
+  assert.equal(stock.fractional, undefined);
+  const c = configFor(base, "BTC-USD", 15);
+  assert.equal(c.openMin, 0);
+  assert.equal(c.fractional, true);
+  assert.equal(c.slippageBps, 15);
+  assert.equal(c.flattenMin, 1425);
+  assert.ok(c.setups.orb.orMinutes >= 60);
+  assert.equal(base.setups.orb.orMinutes, 15, "the original config must not be mutated");
+});
+
+test("crypto sessions are whole UTC days", () => {
+  const sessions = cryptoSessions(makeCryptoDay(0, 100), makeCryptoDay(1, 100));
+  assert.equal(sessions.length, 2);
+  assert.equal(sessions[0].bars.length, 288);
+  assert.equal(sessions[0].bars[0].min, 0);
+  assert.equal(sessions[1].date, "2026-01-06");
+});
+
+test("buildPlan sizes fractional units for crypto and checkOrder accepts them", () => {
+  const c = configFor(makeConfig({ equity: 10000, riskPct: 1, universe: ["BTC-USD"] }), "BTC-USD", 0);
+  const r = buildPlan({ setup: "orb", stopRef: 99000 }, 100000, null, { ...c, maxRiskPct: 5 });
+  assert.equal(r.ok, true);
+  assert.ok(r.plan.shares > 0 && r.plan.shares < 1, `units were ${r.plan.shares}`); // 0.1 BTC max by notional
+  const order = { symbol: "BTC-USD", side: "buy", qty: r.plan.shares, type: "limit", limitPrice: 100000, stopPrice: 99000 };
+  assert.equal(checkOrder(order, c).ok, true);
+  // the same order is refused for a stock config (whole shares only)
+  const stockCfg = makeConfig({ universe: ["BTC-USD"] });
+  assert.equal(checkOrder(order, stockCfg).ok, false);
+});
+
+test("an ORB breakout works on a 24/7 crypto day and trades a fractional size", () => {
+  const range = {};
+  for (let i = 0; i < 12; i++) range[i] = { o: 100.2, c: 100.2, h: 100.5, l: 100.0 };   // first hour: 100.0-100.5
+  const script = {
+    ...range,
+    12: { o: 100.2, c: 100.8, h: 100.9, l: 100.2, v: 4000 },   // breakout close
+    13: { o: 100.8, c: 100.8, h: 100.9, l: 100.7 },            // fills here
+    15: { o: 100.8, c: 102.6, h: 102.7, l: 100.7 },            // hits the 2R target (102.4)
+  };
+  const sessions = cryptoSessions(makeCryptoDay(0, 100), makeCryptoDay(1, 100, script));
+  const base = makeConfig({ equity: 10000, riskPct: 1, universe: ["BTC-USD"], setups: { vwap: { enabled: false } } });
+  const cfg = configFor(base, "BTC-USD", 0);
+  const { trades } = backtestSymbol("BTC-USD", sessions, cfg);
+  assert.equal(trades.length, 1);
+  assert.equal(trades[0].exitReason, "target");
+  assert.ok(Math.abs(trades[0].netR - 2) < 0.01, `netR was ${trades[0].netR}`);
+  assert.ok(!Number.isInteger(trades[0].shares), `shares were ${trades[0].shares}`);
+});
+
+test("the live crypto day is not treated as finished", () => {
+  const sessions = cryptoSessions(makeCryptoDay(0, 100), makeCryptoDay(1, 100));
+  sessions[1].bars = sessions[1].bars.slice(0, 100);                  // up to ~08:15 UTC
+  const cfg = configFor(makeConfig({}), "BTC-USD", 10);
+  const r = scanLatest("BTC-USD", sessions, cfg, sessions[1].date, sessions[1].bars[99].t + 400);
+  assert.equal(r.live, true);
 });
 
 test("noiseBefore needs prior sessions", () => {
