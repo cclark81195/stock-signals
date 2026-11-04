@@ -130,3 +130,6 @@ body.dt-explain .dt-ex { display: block; }
 @media (max-width: 960px) { .dt-setups.cols3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .dt-new { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; margin-left: 4px; }
 .dt-setup select { font: inherit; font-size: 0.9rem; padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+
+.dt-total td { font-weight: 700; border-top: 2px solid var(--border); }
+.dt-table td.tight { white-space: normal; min-width: 90px; line-height: 1.25; }
