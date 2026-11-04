@@ -8,10 +8,11 @@ const qty = (n) => (n == null ? "-" : Number.isInteger(n) ? String(n) : n.toLoca
 const sgn = (x, d = 2) => (x == null ? "-" : `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(d)}`);
 const pct0 = (x) => (x == null ? "-" : `${Math.round(x * 100)}%`);
 const cls = (x) => (x == null || x === 0 ? "" : x > 0 ? "pos" : "neg");
-const SETUP_NAMES = { orb: "Opening-range breakout", vwap: "VWAP reclaim" };
+const SETUP_NAMES = { orb: "Opening-range breakout", vwap: "VWAP reclaim", flag: "Bull flag", triangle: "Ascending triangle" };
 const EXIT_NAMES = { target: "Target", stop: "Stop", "stop-gap": "Gap through stop", time: "End-of-day close", "session-end": "Session end" };
 
 const STORE_KEY = "daytrade-lab-settings";
+const CHECKS = { flag: "f-flag", tri: "f-tri", mkt: "f-mkt", inplay: "f-inplay" };
 const fields = { equity: "f-equity", riskPct: "f-risk", targetR: "f-target", slipBps: "f-slip", cryptoSlipBps: "f-cslip" };
 
 function loadSettings() {
@@ -21,6 +22,8 @@ function loadSettings() {
     for (const [k, id] of Object.entries(fields)) if (saved[k] != null) $(id).value = saved[k];
     if (typeof saved.orb === "boolean") $("f-orb").checked = saved.orb;
     if (typeof saved.vwap === "boolean") $("f-vwap").checked = saved.vwap;
+    for (const [k, id] of Object.entries(CHECKS)) if (typeof saved[k] === "boolean") $(id).checked = saved[k];
+    if (saved.exit === "fixed" || saved.exit === "measured") $("f-exit").value = saved.exit;
   }
   const fromSaved = typeof saved?.symbols === "string" ? parseSymbols(saved.symbols) : [];
   setSelected(fromSaved.length ? fromSaved : DEFAULT_SYMBOLS);
@@ -34,6 +37,8 @@ function readForm() {
   s.symbols = picker.selected.join(",");
   s.orb = $("f-orb").checked;
   s.vwap = $("f-vwap").checked;
+  for (const [k, id] of Object.entries(CHECKS)) s[k] = $(id).checked;
+  s.exit = $("f-exit").value;
   return s;
 }
 
@@ -160,8 +165,9 @@ function renderTrades(trades) {
 function render(data, equity) {
   const a = data.aggregate;
   const warn = $("dt-warn");
-  warn.hidden = !a.sampleWarning;
-  warn.textContent = a.sampleWarning || "";
+  const notes = [...(data.warnings || []), a.sampleWarning].filter(Boolean);
+  warn.hidden = !notes.length;
+  warn.textContent = notes.join(" ");
   renderTiles(a, equity);
   renderCurve(a.curve);
   renderScan(data.symbols, equity);
@@ -193,6 +199,8 @@ async function run() {
   if (s.cryptoSlipBps !== "") qs.set("cryptoSlipBps", s.cryptoSlipBps);
   qs.set("orb", s.orb ? "1" : "0");
   qs.set("vwap", s.vwap ? "1" : "0");
+  for (const k of Object.keys(CHECKS)) qs.set(k, s[k] ? "1" : "0");
+  qs.set("exit", s.exit);
 
   $("f-run").disabled = true;
   $("dt-status").className = "status";

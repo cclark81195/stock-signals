@@ -83,7 +83,7 @@ P/E is shown for context only; it doesn't change the BUY / SELL / HOLD verdict.
 - **If prices stop loading:** Yahoo is either limiting requests (wait a few minutes) or has changed something on its side. The fix is usually a small update to `lib/yahoo.js`.
 
 ## Day Trade Lab (research only)
-`/daytrade.html` finds quick in-and-out setups (opening-range breakout, VWAP reclaim) and backtests them on the last ~60 days of 5-minute prices with costs included. It places no orders. Pick up to 10 symbols from the S&P 500, SPY or the five largest cryptocurrencies (crypto is experimental). See `docs/DAYTRADE.md` for the rules, the risk limits and the plan for connecting a broker. Run the tests with `npm test`.
+`/daytrade.html` finds quick in-and-out setups (opening-range breakout, VWAP reclaim, plus optional bull-flag and ascending-triangle patterns with market and volume filters) and backtests them on the last ~60 days of 5-minute prices with costs included. It places no orders. Pick up to 10 symbols from the S&P 500, SPY or the five largest cryptocurrencies (crypto is experimental). See `docs/DAYTRADE.md` for the rules, the risk limits and the plan for connecting a broker. Run the tests with `npm test`.
 
 ## Project layout
 - `public/` - the website itself (`index.html`, `styles.css`, `app.js`; Day Trade Lab: `daytrade.html`, `daytrade.css`, `daytrade.js`)

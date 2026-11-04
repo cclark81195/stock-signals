@@ -59,6 +59,16 @@ Crypto uses its own profile in `lib/daytrade/markets.js`: sessions are UTC days 
 
 Treat crypto as experimental: the rules are the stock rules re-timed and have not been tuned, Yahoo's 5-minute crypto history has not been checked against real data, real exchange costs may be well above 10 bps, and the Robinhood MCP is reportedly equities-only, so crypto here is research only.
 
+## Pattern setups, filters and the measured-move exit (all off by default)
+
+- **Bull flag** (`flag`): a pole of at least 6 normal bar-ranges (and 0.4% of price), then a 3 to 8 bar pullback on lighter volume that gives back at most half the pole and never exceeds the pole high; entry on the first close above the flag high on volume. Stop under the flag low.
+- **Ascending triangle** (`triangle`): in the previous 24 bars, a ceiling touched at least twice (within 0.1%), the lows of each third of the window rising, at least 3 normal bar-ranges tall; entry on the first close above the ceiling on volume. Stop under the most recent low.
+- **Market filter** (`filters.market`): stocks only trade while SPY is above its own VWAP at the signal bar. Crypto ignores it. If SPY cannot be loaded the page says so and the filter is not applied.
+- **In-play filter** (`filters.inPlay`): the stock's volume over the first up-to-30 minutes must be at least `minRelVol` (1.2) times the average for the same bars over the last 10 sessions. It only uses bars up to the signal bar.
+- **Measured-move exit** (`exit: "measured"`): flag and triangle trades aim for the pattern height instead of `targetR`, clamped to between 1R and 4R. Opening-range and VWAP trades keep the fixed target.
+
+Each setup's results are listed separately in "By setup", so you can compare them. The thresholds were chosen from the shape of the patterns, not tuned on data. Judge each by "per trade, after costs" across many symbols; with about 60 days of data a single pattern produces few trades, so a good-looking result is as likely to be luck as an edge.
+
 ## Known limits
 
 - Each symbol is backtested independently; the live guard is portfolio-wide, so the real bot will trade less than the backtest implies.
