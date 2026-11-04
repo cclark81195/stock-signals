@@ -152,14 +152,24 @@ function renderBySetup(a) {
     : `<tr><td colspan="4" class="dt-empty">No trades.</td></tr>`;
 }
 
-function renderTrades(trades) {
+function renderTrades(trades, total) {
   $("dt-trades").innerHTML = trades.length
     ? trades.map((t) => `<tr>
-        <td>${esc(et(t.entryTime))}</td><td><strong>${esc(t.symbol)}</strong></td><td>${esc(SETUP_NAMES[t.setup] || t.setup)}</td>
-        <td class="num">${price(t.entry)}</td><td class="num">${price(t.exit)}</td><td>${esc(EXIT_NAMES[t.exitReason] || t.exitReason)}</td>
+        <td>${esc(et(t.entryTime))}</td><td><strong>${esc(t.symbol)}</strong></td><td class="tight">${esc(SETUP_NAMES[t.setup] || t.setup)}</td>
+        <td class="num">${price(t.entry)}</td><td class="num">${price(t.exit)}</td><td class="num">${qty(t.shares)}</td>
+        <td class="tight">${esc(EXIT_NAMES[t.exitReason] || t.exitReason)}</td>
         <td class="num ${cls(t.netR)}">${sgn(t.netR)}R</td><td class="num ${cls(t.pnl)}">${money(t.pnl)}</td>
       </tr>`).join("")
-    : `<tr><td colspan="8" class="dt-empty">No trades.</td></tr>`;
+    : `<tr><td colspan="9" class="dt-empty">No trades.</td></tr>`;
+  const shown = trades.length;
+  const sumR = trades.reduce((t, x) => t + x.netR, 0);
+  const sumPnl = trades.reduce((t, x) => t + x.pnl, 0);
+  $("dt-trades-foot").innerHTML = shown
+    ? `<tr class="dt-total"><td colspan="7">Total, ${shown} trade${shown === 1 ? "" : "s"}</td><td class="num ${cls(sumR)}">${sgn(sumR)}R</td><td class="num ${cls(sumPnl)}">${money(sumPnl)}</td></tr>`
+    : "";
+  $("dt-trades-count").textContent = shown
+    ? (total > shown ? `(newest ${shown} of ${total})` : `(${shown}, newest first)`)
+    : "";
 }
 
 function render(data, equity) {
@@ -174,7 +184,7 @@ function render(data, equity) {
   renderBySymbol(data.symbols);
   renderByClass(data);
   renderBySetup(a);
-  renderTrades(data.recentTrades);
+  renderTrades(data.recentTrades, data.tradesTotal ?? data.recentTrades.length);
   $("dt-results").hidden = false;
   $("dt-updated").innerHTML = `Run at <strong>${new Date(data.generatedAt * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</strong>`;
 }

@@ -104,7 +104,8 @@ export default async function handler(req, res) {
       },
       aggregate: summarize(allTrades),
       byClass,
-      recentTrades: allTrades.sort((a, b) => b.exitTime - a.exitTime).slice(0, 40),
+      tradesTotal: allTrades.length,
+      recentTrades: allTrades.sort((a, b) => b.exitTime - a.exitTime).slice(0, 500), // newest first; the page shows them all
       symbols: rows,
     });
   } catch (e) {

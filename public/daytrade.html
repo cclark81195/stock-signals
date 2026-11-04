@@ -229,31 +229,34 @@
       </section>
 
       <section aria-label="Recent trades">
-        <h2>Recent simulated trades</h2>
+        <h2>All simulated trades <span class="hint" id="dt-trades-count"></span></h2>
         <div class="table-wrap">
           <table class="stocks dt-table">
             <thead><tr>
               <th title="When the trade was entered, Eastern time">When (ET)</th>
               <th title="Ticker symbol">Symbol</th>
               <th title="Which entry rule produced the trade">Setup</th>
-              <th class="num" title="Price paid per share, including slippage">Entry</th>
-              <th class="num" title="Price received per share, after slippage where it applies">Exit</th>
+              <th class="num" title="Price paid per share (or per coin), including slippage">Buy price</th>
+              <th class="num" title="Price received per share (or per coin), after slippage where it applies">Sell price</th>
+              <th class="num" title="Number of shares (or units of crypto) bought and sold">Shares</th>
               <th title="How the trade ended">Exit reason</th>
               <th class="num" title="Result after costs, in R">Result</th>
               <th class="num" title="Profit or loss in dollars after costs">P&amp;L</th>
             </tr></thead>
             <tbody id="dt-trades"></tbody>
+            <tfoot id="dt-trades-foot"></tfoot>
           </table>
         </div>
         <details class="dt-guide">
           <summary>What these columns and exit reasons mean</summary>
           <dl>
             <dt>When (ET)</dt><dd>The day and time the trade was entered, in New York time.</dd>
-            <dt>Entry / Exit</dt><dd>The price per share paid and received. Both include slippage where it applies, so they are slightly worse than the raw market price.</dd>
+            <dt>Buy price / Sell price</dt><dd>The price per share paid and received. Both include slippage where it applies, so they are slightly worse than the raw market price.</dd>
+            <dt>Shares</dt><dd>How many shares (or units of crypto) were bought and then sold. It is sized so that hitting the stop loses about your chosen risk.</dd>
             <dt>Exit reason</dt>
             <dd><strong>Target:</strong> price reached the profit target. <strong>Stop:</strong> price hit the stop. <strong>Gap through stop:</strong> price opened below the stop, so the exit was at the open and the loss is larger than planned. <strong>End-of-day close:</strong> still open at the cutoff (3:45 PM ET for stocks, 23:45 UTC for crypto), so it was closed. <strong>Session end:</strong> the data ended before the cutoff, such as on a half day.</dd>
             <dt>Result</dt><dd>The outcome after costs in R. +2R is twice the amount risked; &minus;1R is a full loss of the amount risked. It can be a bit below &minus;1R after slippage or a gap.</dd>
-            <dt>P&amp;L</dt><dd>The same outcome in dollars for the shares traded, after costs.</dd>
+            <dt>P&amp;L</dt><dd>Profit or loss in dollars: (sell price &minus; buy price) &times; shares, after costs. The last row of the table adds them all up.</dd>
           </dl>
         </details>
       </section>
