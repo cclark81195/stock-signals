@@ -180,3 +180,62 @@ test("account replay: a buy bigger than the balance is never taken", () => {
   const r = replayAccount([row("A", [["d1", "d2", 5]])], 50, 100, days);
   assert.equal(r.taken, 0); assert.equal(r.skipped, 1); assert.deepEqual(r.equity, [50, 50, 50, 50, 50]);
 });
+
+import { bollinger } from "../lib/swing/engine.js";
+const wobble = (n, base = 100) => Array.from({ length: n }, (_, i) => base + 0.6 * Math.sin(i * 0.9));
+const bbCfg = (o = {}) => cfgOf({ strategy: "bollinger", trendFilter: false, ...o });
+
+test("bollinger bands: flat prices give zero-width bands; bands never use future prices", () => {
+  const flat = bollinger(Array(30).fill(50), 20, 2);
+  assert.equal(flat.upper[25], 50); assert.equal(flat.lower[25], 50); assert.equal(flat.mid[18], null);
+  const a = bollinger(wobble(40), 20, 2), b = bollinger([...wobble(30), 5, 500, 5, 500], 20, 2);
+  assert.equal(a.lower[29], b.lower[29]);
+  assert.ok(a.upper[30] > a.mid[30] && a.lower[30] < a.mid[30]);
+});
+
+test("bollinger: buys the close below the lower band at the NEXT open, sells back at the average", () => {
+  const closes = [...wobble(260), 95, 97, 99, 100.5, 101, 101, 101, 101];
+  const bars = mk(closes);
+  const { trades } = backtestDaily("X", bars, bbCfg({ slippageBps: 10 }));
+  assert.equal(trades.length, 1);
+  const t = trades[0];
+  assert.equal(t.setup, "bollinger");
+  assert.equal(t.date, bars[261].date);                              // signal day 260, buy day 261
+  assert.ok(Math.abs(t.entry - bars[261].o * 1.001) < 0.01);
+  assert.equal(t.exitReason, "signal");
+  assert.ok(t.exit > t.entry && t.netR > 0);
+});
+
+test("bollinger: the cautious entry waits for a close back above the lower band, so it buys later and dearer", () => {
+  const closes = [...wobble(260), 92, 91, 95, 99, 100.5, 101, 101, 101, 101];
+  const bars = mk(closes);
+  const plain = backtestDaily("X", bars, bbCfg()).trades[0];
+  const cautious = backtestDaily("X", bars, bbCfg({ bollinger: { entry: "reclaim" } })).trades[0];
+  assert.ok(plain && cautious);
+  assert.ok(cautious.date > plain.date && cautious.entry > plain.entry);
+});
+
+test("bollinger: exiting at the upper band holds longer than exiting at the average; both use the same entry", () => {
+  const closes = [...wobble(260), 95, 96, 98, 100, 102, 104, 106, 108, 110, 112, 112, 112, 112];
+  const bars = mk(closes);
+  const mid = backtestDaily("X", bars, bbCfg({ bollinger: { exitFrac: 0 } })).trades[0];
+  const half = backtestDaily("X", bars, bbCfg({ bollinger: { exitFrac: 0.5 } })).trades[0];
+  const up = backtestDaily("X", bars, bbCfg({ bollinger: { exitFrac: 1 } })).trades[0];
+  assert.equal(mid.date, up.date);
+  assert.ok(mid.holdBars <= half.holdBars && half.holdBars <= up.holdBars && mid.holdBars < up.holdBars, `${mid.holdBars}/${half.holdBars}/${up.holdBars}`);
+});
+
+test("bollinger: the time limit and the stop still protect a dip that keeps sliding", () => {
+  const stuck = backtestDaily("X", mk([...wobble(260), 95, ...Array(30).fill(95)]), bbCfg({ bollinger: { maxHold: 5 } })).trades[0];
+  assert.equal(stuck.exitReason, "time");
+  const crash = mk([...wobble(260), 95, 94, 93, 92, 91, 90], { 262: { l: 70 } });
+  const t = backtestDaily("X", crash, bbCfg()).trades[0];
+  assert.ok(["stop", "stop-gap"].includes(t.exitReason) && t.netR < 0);
+});
+
+test("bollinger: the trend filter blocks it in a downtrend", () => {
+  const down = Array.from({ length: 260 }, (_, i) => 200 - 0.3 * i + 0.6 * Math.sin(i * 0.9));
+  const closes = [...down, down[259] - 6, down[259] - 6, down[259] - 3, down[259]];
+  assert.equal(backtestDaily("X", mk(closes), bbCfg({ trendFilter: true })).trades.length, 0);
+  assert.ok(backtestDaily("X", mk(closes), bbCfg({ trendFilter: false })).trades.length >= 1);
+});

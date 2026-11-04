@@ -39,8 +39,9 @@
         <select id="s-strategy" aria-describedby="h-strategy">
           <option value="meanrev">Buy sharp dips in an uptrend</option>
           <option value="breakout">Buy new highs and ride the trend</option>
+          <option value="bollinger">Buy below the lower Bollinger band</option>
         </select>
-        <span class="help dt-ex" id="h-strategy"><strong>Dips:</strong> in a stock that is in a long-term uptrend, buy after a sudden 2-day drop and sell on the bounce, usually within a week. Wins often, small gains. <strong>New highs:</strong> buy when a stock closes above its highest price of the last 55 days and hold until it breaks below its 20-day low. Wins rarely, big gains.</span>
+        <span class="help dt-ex" id="h-strategy"><strong>Dips:</strong> in a stock that is in a long-term uptrend, buy after a sudden 2-day drop and sell on the bounce, usually within a week. Wins often, small gains. <strong>New highs:</strong> buy when a stock closes above its highest price of the last 55 days and hold until it breaks below its 20-day low. Wins rarely, big gains. <strong>Bollinger band:</strong> buy when a stock closes unusually far below its 20-day average (below the lower band) and sell when it returns toward the average. Long only, never short.</span>
       </label>
       <label>History
         <select id="s-years" aria-describedby="h-years">
@@ -98,6 +99,35 @@
         <label>Give up after (days)
           <input id="s-hold2" type="number" min="0" max="500" step="1" value="0" inputmode="numeric" aria-describedby="h-hold2" />
           <span class="help dt-ex" id="h-hold2">Optional time limit in days. 0 means hold until the exit rule or the stop says otherwise.</span>
+        </label>
+      </div>
+      <div class="dt-setups cols3" id="sw-bb" hidden>
+        <label>Average length (days)
+          <input id="s-bblen" type="number" min="5" max="100" step="1" value="20" inputmode="numeric" aria-describedby="h-bblen" />
+          <span class="help dt-ex" id="h-bblen">The "middle band" is the average closing price of this many days. 20 is the standard setting.</span>
+        </label>
+        <label>Band width (standard deviations)
+          <input id="s-bbk" type="number" min="0.5" max="4" step="0.1" value="2" inputmode="decimal" aria-describedby="h-bbk" />
+          <span class="help dt-ex" id="h-bbk">How far the bands sit from the average, measured in standard deviations (a measure of how much the price normally wobbles). 2 is standard and puts the lower band where only a small share of days close. A larger number waits for rarer, deeper dips.</span>
+        </label>
+        <label>Give up after (days)
+          <input id="s-bbhold" type="number" min="0" max="500" step="1" value="10" inputmode="numeric" aria-describedby="h-bbhold" />
+          <span class="help dt-ex" id="h-bbhold">Sell anyway after this many days if it has not recovered, so money is not tied up in a stock that keeps sliding. 0 means no limit.</span>
+        </label>
+        <label>Buy when
+          <select id="s-bbentry" aria-describedby="h-bbentry">
+            <option value="below">the close is below the lower band</option>
+            <option value="reclaim">it closes back above the lower band</option>
+          </select>
+          <span class="help dt-ex" id="h-bbentry"><strong>Below:</strong> buy the first day it closes under the lower band, the plain rule. <strong>Back above:</strong> wait for a day that closes back inside the band after a day outside it. That buys later and at a higher price, but skips stocks that keep crashing day after day.</span>
+        </label>
+        <label>Sell when the close reaches
+          <select id="s-bbexit" aria-describedby="h-bbexit">
+            <option value="mid">the average (middle band)</option>
+            <option value="half">halfway to the upper band</option>
+            <option value="upper">the upper band</option>
+          </select>
+          <span class="help dt-ex" id="h-bbexit"><strong>The average:</strong> the classic exit, back "in line" with the moving average; trades are short and win often. <strong>Halfway or the upper band:</strong> holds longer for a bigger gain but is hit less often and gives the trade more time to turn against you. The stop and time limit apply either way.</span>
         </label>
       </div>
       <label class="wide">Only these symbols (optional)
@@ -253,6 +283,7 @@
       <summary>How the strategies and the test work</summary>
       <p><strong>Buy sharp dips.</strong> If a stock closes above its 200-day average (a long-term uptrend) and its 2-day RSI is below 10 (it just dropped hard), the system buys at the next day's open. It sells at the open after the stock closes above its 5-day average, after 10 days at most, or at the stop.</p>
       <p><strong>Buy new highs.</strong> If a stock closes above its highest price of the previous 55 days (and above its 200-day average), it buys at the next open and holds until a close below the previous 20-day low, or the stop.</p>
+      <p><strong>Bollinger band.</strong> The bands are the 20-day average of the close plus and minus 2 standard deviations. If a stock closes below the lower band (or, in the cautious version, closes back above it after a day below), the system buys at the next open and sells at the open after the close reaches the average (or halfway to, or all the way to, the upper band), after 10 days at most, or at the stop. It never shorts.</p>
       <p><strong>Stops and R.</strong> The stop sits a set number of average daily ranges (ATR) below the buy price, and that distance is 1R. If a day trades through the stop the test sells at the stop price, plus slippage; if a day opens below it, it sells at the open, which can be a loss bigger than 1R.</p>
       <p><strong>No peeking.</strong> Every signal uses only prices up to that day's close, and the order fills at the next day's open. The automated tests check that changing future prices never changes a trade that already happened.</p>
       <p><strong>Limits.</strong> Yahoo's daily prices are adjusted for stock splits but not dividends, so returns are slightly understated. The stock list is today's S&amp;P 500, which leaves out companies that were removed after failing (survivorship bias) and flatters every long-only test, especially over ten years. Each stock is traded on its own with a fixed dollar amount, so this shows the strategy's edge, not the result of one real account with limited cash. Historical P/E ratios are not available from this data source (only today's), so valuation is not used here; testing it on past data would quietly use information that was unknown at the time.</p>

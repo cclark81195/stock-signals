@@ -14,7 +14,7 @@ const STRATEGY_NAMES = { meanrev: "Buy sharp dips", breakout: "Buy new highs" };
 const EXIT_NAMES = { signal: "Exit signal", stop: "Stop", "stop-gap": "Gap through stop", time: "Time limit", "data-end": "Still open at the end" };
 
 const STORE_KEY = "swing-lab-settings";
-const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
+const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
 const CHECKS = { trend: "s-trend", mkt: "s-mkt" };
 const SW_BATCH = 25, SW_PARALLEL = 2;
 
@@ -39,12 +39,13 @@ function params(s) {
   const set = (k, v) => { if (v !== "" && v != null) p.set(k, v); };
   set("dollars", s.dollars); set("slipBps", s.slipBps); set("stopAtr", s.stopAtr);
   if (s.strategy === "meanrev") { set("rsiBuy", s.rsiBuy); set("exitSma", s.exitSma); set("hold", s.hold); }
+  else if (s.strategy === "bollinger") { set("bbLen", s.bbLen); set("bbK", s.bbK); set("bbEntry", s.bbEntry); set("bbExit", s.bbExit); set("hold", s.bbHold); }
   else { set("entryLen", s.entryLen); set("exitLen", s.exitLen); set("hold", s.hold2); }
   return p;
 }
 function showStrategy() {
-  const mr = $("s-strategy").value === "meanrev";
-  $("sw-mr").hidden = !mr; $("sw-bo").hidden = mr;
+  const v = $("s-strategy").value;
+  $("sw-mr").hidden = v !== "meanrev"; $("sw-bo").hidden = v !== "breakout"; $("sw-bb").hidden = v !== "bollinger";
 }
 
 // ---------------------------------------------------------------- merging the per-stock totals
@@ -334,8 +335,11 @@ function progress(done, total, extra = "") {
   $("sw-progress-text").textContent = `${done} of ${total} stocks${extra}`;
 }
 function settingsNote(s) {
+  const bbExit = { mid: "the average", half: "halfway to the upper band", upper: "the upper band" }[s.bbExit] || "the average";
   const strat = s.strategy === "meanrev"
     ? `buy dips (2-day RSI under ${s.rsiBuy}, sell above the ${s.exitSma}-day average, ${Number(s.hold) > 0 ? `${s.hold}-day limit` : "no time limit"})`
+    : s.strategy === "bollinger"
+    ? `Bollinger band (${s.bbLen}-day average, ${s.bbK} deviations; buy ${s.bbEntry === "reclaim" ? "when it closes back above the lower band" : "below the lower band"}, sell at ${bbExit}, ${Number(s.bbHold) > 0 ? `${s.bbHold}-day limit` : "no time limit"})`
     : `buy ${s.entryLen}-day highs, sell below the ${s.exitLen}-day low${Number(s.hold2) > 0 ? `, ${s.hold2}-day limit` : ""}`;
   return `Settings used: ${strat}; ${s.stopAtr}-ATR stop; ${s.trend ? "uptrend only" : "any trend"}${s.mkt ? ", market up" : ""}; ${s.slipBps} bps slippage; $${s.dollars} per buy; ${s.years} years.`;
 }
