@@ -90,7 +90,8 @@ export function makeTradeChart(card, h) {
       const pts = up
         ? `${cx.toFixed(1)},${(cy - r).toFixed(1)} ${(cx - r).toFixed(1)},${(cy + r * 0.8).toFixed(1)} ${(cx + r).toFixed(1)},${(cy + r * 0.8).toFixed(1)}`
         : `${cx.toFixed(1)},${(cy + r).toFixed(1)} ${(cx - r).toFixed(1)},${(cy - r * 0.8).toFixed(1)} ${(cx + r).toFixed(1)},${(cy - r * 0.8).toFixed(1)}`;
-      const text = up ? `Buy ${t.symbol}: ${qty(t.shares)} shares at ${price(t.entry)}, ${t.date}` : `Sell ${t.symbol}: ${qty(t.shares)} shares at ${price(t.exit)}, ${t.exitDate}, ${money(t.pnl)}`;
+      const sh = t.side === "short";
+      const text = up ? `${sh ? "Short sale" : "Buy"} ${t.symbol}: ${qty(t.shares)} shares at ${price(t.entry)}, ${t.date}` : `${sh ? "Cover" : "Sell"} ${t.symbol}: ${qty(t.shares)} shares at ${price(t.exit)}, ${t.exitDate}, ${money(t.pnl)}`;
       const id = bal.events.indexOf(e);
       return `<polygon class="mk ${up ? "buy" : "sell " + (t.pnl > 0 ? "win" : "loss")}${id === bal.sel ? " sel" : ""}" points="${pts}" data-i="${id}"${focusable ? ' tabindex="0" role="button"' : ""} aria-label="${esc(text)}"><title>${esc(text)}</title></polygon>`;
     }).join("") : "";
@@ -117,7 +118,7 @@ export function makeTradeChart(card, h) {
     bal.sel = i;
     const t = e.t;
     const sale = bal.events.find((x) => x.kind === "sell" && x.k === e.k);
-    q(".bal-detail").textContent = `Bought ${qty(t.shares)} ${t.symbol} at ${price(t.entry)} (${money(t.shares * t.entry)}) on ${t.date}; sold at ${price(t.exit)} on ${t.exitDate}, ${exitNames[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${sgn(t.netR)}R) after ${t.holdBars} day${t.holdBars === 1 ? "" : "s"}. ${bal.start ? "Balance" : "Profit"} after the sale: ${money(sale.balance)}.`;
+    q(".bal-detail").textContent = `${t.side === "short" ? "Shorted" : "Bought"} ${qty(t.shares)} ${t.symbol} at ${price(t.entry)} (${money(t.shares * t.entry)}) on ${t.date}; ${t.side === "short" ? "bought back" : "sold"} at ${price(t.exit)} on ${t.exitDate}, ${exitNames[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${sgn(t.netR)}R) after ${t.holdBars} day${t.holdBars === 1 ? "" : "s"}. ${bal.start ? "Balance" : "Profit"} after the sale: ${money(sale.balance)}.`;
     draw();
     const m = box.querySelector(`[data-i="${i}"]`);
     if (m && m.hasAttribute("tabindex")) m.focus();
