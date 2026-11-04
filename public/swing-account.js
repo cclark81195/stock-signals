@@ -12,10 +12,11 @@ export function replayAccount(rows, balance, dollars, dayList) {
   const byDay = new Map();
   for (const r of rows) for (const t of r.trades || []) {
     if (!byDay.has(t.date)) byDay.set(t.date, []);
-    byDay.get(t.date).push({ k: tieKey(t.symbol + t.date), exitDate: t.exitDate, pnl: t.pnl });
+    byDay.get(t.date).push({ k: tieKey(t.symbol + t.date), exitDate: t.exitDate, pnl: t.pnl, t });
   }
   for (const list of byDay.values()) list.sort((x, y) => x.k - y.k);
   let cash = balance, realized = 0, taken = 0, skipped = 0, maxOpen = 0, open = [];
+  const takenList = [];                 // the trades the account actually took, for the chart
   const equity = [];
   for (const d of dayList) {
     const still = [];
@@ -23,12 +24,12 @@ export function replayAccount(rows, balance, dollars, dayList) {
     open = still;
     for (const c of byDay.get(d) || []) {
       if (cash < dollars - 1e-9) { skipped++; continue; }
-      cash -= dollars; taken++;
+      cash -= dollars; taken++; takenList.push(c.t);
       if (c.exitDate <= d) { cash += dollars + c.pnl; realized += c.pnl; } else open.push(c);
     }
     maxOpen = Math.max(maxOpen, open.length);
     equity.push(balance + realized);
   }
-  return { equity, taken, skipped, maxOpen };
+  return { equity, taken, skipped, maxOpen, takenList };
 }
 

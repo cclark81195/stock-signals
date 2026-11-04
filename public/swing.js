@@ -1,5 +1,6 @@
 // Swing Lab - front end (no build step, no dependencies)
 import { replayAccount } from "./swing-account.js";
+import { makeTradeChart } from "./swing-chart.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -179,41 +180,13 @@ function computeVs(rows) {
   };
 }
 
-/** Account balance against the same money put into SPY on day one. */
-function renderAcct(v) {
-  const box = $("sw-acct");
-  if (!v.account) { $("sw-acctcard").hidden = true; return; }
-  $("sw-acctcard").hidden = false;
-  const spyVal = v.spyClose.map((c) => (v.balance * c) / v.baseClose);
-  const n = v.equity.length;
-  const W = 640, H = 190, pl = 56, pr = 10, pt = 10, pb = 22;
-  const all = [...v.equity, ...spyVal, v.balance];
-  let lo = Math.min(...all), hi = Math.max(...all);
-  if (hi - lo < 1) { hi += 1; lo -= 1; }
-  const step = Math.max(1, Math.ceil(n / 600));
-  const idx = []; for (let i = 0; i < n; i += step) idx.push(i); if (idx[idx.length - 1] !== n - 1) idx.push(n - 1);
-  const x = (k) => pl + (k / (idx.length - 1)) * (W - pl - pr);
-  const y = (val) => pt + (1 - (val - lo) / (hi - lo)) * (H - pt - pb);
-  const line = (arr) => idx.map((i, k) => `${x(k).toFixed(1)},${y(arr[i]).toFixed(1)}`).join(" ");
-  const fmt = (val) => "$" + Math.round(val).toLocaleString("en-US");
-  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Account balance compared with the S&amp;P 500">
-      <line class="zero" x1="${pl}" x2="${W - pr}" y1="${y(v.balance).toFixed(1)}" y2="${y(v.balance).toFixed(1)}"></line>
-      <polyline class="line2" points="${line(spyVal)}"></polyline>
-      <polyline class="line" points="${line(v.equity)}"></polyline>
-      <text class="lbl" x="${pl - 6}" y="${y(hi).toFixed(1)}" text-anchor="end" dominant-baseline="hanging">${fmt(hi)}</text>
-      <text class="lbl" x="${pl - 6}" y="${y(lo).toFixed(1)}" text-anchor="end">${fmt(lo)}</text>
-      <text class="lbl" x="${pl}" y="${H - 5}">${esc(v.dates[0])}</text>
-      <text class="lbl" x="${W - pr}" y="${H - 5}" text-anchor="end">${esc(v.dates[n - 1])}</text></svg>`;
-  $("sw-acct-note").textContent = `${fmt(v.balance)} start`;
-}
-
 function renderVs(rows) {
   const v = computeVs(rows);
   sw.vs = v;
   const box = $("sw-vs");
   if (!v) {
     box.hidden = !sw.benchErr;
-    $("sw-vs-tiles").innerHTML = ""; $("sw-acctcard").hidden = true;
+    $("sw-vs-tiles").innerHTML = "";
     $("sw-vs-note").textContent = sw.benchErr ? "The S&P 500 prices could not be loaded, so the comparison is unavailable. Run the test again to retry." : "";
     return;
   }
@@ -237,7 +210,6 @@ function renderVs(rows) {
   $("sw-vs-note").textContent = v.account
     ? `Strategy: one account starting with ${money(v.balance)}, ${money(sw.dollars)} per buy, profit counted when a trade is sold, idle cash earning nothing. S&P 500: the same money in SPY, price only.`
     : `Strategy: ${money(v.capital)} set aside (one ${money(sw.dollars)} slot per stock, every signal taken), idle cash earning nothing. S&P 500: SPY price only. Enter a starting balance above to test a single account with limited cash.`;
-  renderAcct(v);
 }
 
 function renderCurve(curve) {
@@ -301,6 +273,26 @@ function renderTrades(trades) {
   $("sw-trades-foot").innerHTML = shown.length ? `<tr><td colspan="8"><strong>Total of the ${shown.length} shown</strong></td><td class="num ${cls(r)}"><strong>${sgn(r)}R</strong></td><td class="num ${cls(pnl)}"><strong>${money(pnl)}</strong></td></tr>` : "";
 }
 
+const tradeChart = makeTradeChart($("sw-balcard"), { esc, money, sgn, price, qty, exitNames: EXIT_NAMES });
+
+/** The balance chart with a marker per buy and sell. Redrawn after every batch, so it grows as the scan runs. */
+function renderTradeChart(rows, all, final) {
+  const balance = Number($("s-balance").value) || 0;
+  if (!all.length) { tradeChart.render([], 0); return; }
+  if (balance <= 0) { tradeChart.render(all, 0, { settle: final, title: "Profit and loss, with every buy and sell (every signal, no cash limit)" }); return; }
+  const dates = [...new Set(all.flatMap((t) => [t.date, t.exitDate]))].sort();
+  const { takenList } = replayAccount(rows, balance, sw.dollars, dates);
+  let spy = null;
+  if (sw.bench && sw.bench.length) {
+    const start = rows.map((r) => r.testStart).filter(Boolean).sort()[0];
+    const i0 = Math.max(1, sw.bench.findIndex(([d]) => d >= start));
+    const base = sw.bench[i0 - 1][1];
+    const map = new Map(sw.bench);
+    spy = { close: (date) => (map.has(date) ? map.get(date) : null), base };
+  }
+  tradeChart.render(takenList, balance, { spy, settle: final, title: "Account balance, with every buy and sell" });
+}
+
 function render(final = false) {
   const rows = [...sw.rows.values()];
   if (!rows.length) { $("sw-results").hidden = true; return; }
@@ -324,12 +316,11 @@ function render(final = false) {
       <td class="num ${cls(exp(x.f))}">${half(x.f)}</td><td class="num ${cls(exp(x.s))}">${half(x.s)}</td></tr>`).join("");
 
   renderStocks();
-  if (final) {
-    const trades = rows.flatMap((r) => r.trades || []);
-    let cum = 0;
-    renderCurve([...trades].sort((a, b) => a.exitTime - b.exitTime).map((t) => { cum += t.netR; return { cumR: Math.round(cum * 100) / 100, date: t.exitDate }; }));
-    renderTrades(trades);
-  }
+  const trades = rows.flatMap((r) => r.trades || []);
+  let cum = 0;
+  renderCurve([...trades].sort((a, b) => a.exitTime - b.exitTime).map((t) => { cum += t.netR; return { cumR: Math.round(cum * 100) / 100, date: t.exitDate }; }));
+  renderTradeChart(rows, trades, final);
+  renderTrades(trades);
   const n = sw.failed.length;
   $("sw-failed").hidden = !n;
   $("sw-failed").textContent = n ? `${n} stock${n === 1 ? "" : "s"} could not be tested (usually Yahoo rate-limiting or missing data): ${sw.failed.slice(0, 40).join(", ")}${n > 40 ? ", ..." : ""}. Use "Retry failed" to try them again.` : "";
@@ -357,7 +348,7 @@ async function run(only = null) {
   const universe = typed.length ? typed : sw.stocks.map((x) => x.symbol);
   if (!universe.length) { $("sw-status").className = "status error"; $("sw-status").textContent = "The stock list has not loaded yet. Type some symbols above or reload the page."; return; }
   const symbols = only || universe;
-  if (!only) { sw.rows.clear(); sw.dailyPnl = {}; }
+  if (!only) { sw.rows.clear(); sw.dailyPnl = {}; tradeChart.reset(); }
   sw.bench = null; sw.benchErr = false; sw.vs = null;
   const benchP = fetch(`/api/swing?bench=1&years=${encodeURIComponent(s.years)}`).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || r.status); sw.bench = d.bench; })).catch(() => { sw.benchErr = true; });
   sw.failed = []; sw.running = true; sw.cancel = false;
@@ -365,7 +356,7 @@ async function run(only = null) {
   $("sw-used").textContent = settingsNote(s);
   $("sw-run").disabled = true; $("sw-cancel").hidden = false; $("sw-retry").hidden = true; $("sw-progress").hidden = false;
   $("sw-status").className = "status";
-  $("sw-status").textContent = (only ? "Retrying the stocks that failed..." : `Testing ${symbols.length} stock${symbols.length === 1 ? "" : "s"} on up to ${s.years} years of daily prices...`) + " The chart and trade list appear when it finishes.";
+  $("sw-status").textContent = (only ? "Retrying the stocks that failed..." : `Testing ${symbols.length} stock${symbols.length === 1 ? "" : "s"} on up to ${s.years} years of daily prices...`) + " The charts and tables fill in as results arrive.";
 
   const queue = [];
   for (let i = 0; i < symbols.length; i += SW_BATCH) queue.push(symbols.slice(i, i + SW_BATCH));

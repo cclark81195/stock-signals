@@ -129,11 +129,6 @@
           <h3>Versus the S&amp;P 500</h3>
           <div class="dt-tiles" id="sw-vs-tiles"></div>
           <p class="hint" id="sw-vs-note"></p>
-          <div class="dt-chart-card" id="sw-acctcard" hidden>
-            <div class="dt-chart-title">Account balance vs the same money in the S&amp;P 500 <span class="hint" id="sw-acct-note"></span></div>
-            <div id="sw-acct"></div>
-            <p class="dt-ballegend"><span><i class="lg ln"></i> This strategy (profit counted when sold)</span> <span><i class="lg ln sp"></i> S&amp;P 500 (SPY, price only)</span></p>
-          </div>
           <p class="hint dt-ex">How this is worked out. <strong>With a starting balance:</strong> one account replays every trade in date order and only takes a buy when it has the cash; profit or loss is counted when a trade is sold, so a position still open does not move the balance, and the daily return is the balance's change from one day to the next. <strong>Without one:</strong> every stock tested gets its own "slot" of the dollars-per-buy amount, so the strategy's money is (stocks tested &times; dollars per buy). Each day the open trades are valued at that day's close, and the day's profit or loss divided by that money is the strategy's return for the day. Days with nothing invested earn nothing (cash is assumed idle), and nothing is compounded. The S&amp;P 500 is SPY's daily change over the same days, price only (no dividends, which the strategy does not collect either). "Average annual" is the average of the full calendar years in the window; "Compound growth" turns the whole window's total into a yearly rate. A strategy that is invested only part of the time can trail the index in total and still be worth having if it is much steadier, but it has to beat the index to be worth the effort on its own.</p>
         </div>
 
@@ -173,6 +168,23 @@
           <div id="sw-curve"></div>
         </div>
         <p class="hint dt-ex">Every stock's trades added into one line in the order they closed. R, not dollars, so one very large position cannot hide a losing strategy.</p>
+
+        <div class="dt-chart-card dt-balcard" id="sw-balcard" hidden>
+          <div class="dt-chart-title"><span class="bal-title">Account balance, with every buy and sell</span> <span class="hint bal-note"></span></div>
+          <div class="dt-balbar" role="group" aria-label="Chart range">
+            <button type="button" class="dt-mini bal-win" data-win="21">1 month</button>
+            <button type="button" class="dt-mini bal-win" data-win="63">3 months</button>
+            <button type="button" class="dt-mini bal-win" data-win="252">1 year</button>
+            <button type="button" class="dt-mini bal-win" data-win="all">All</button>
+            <span class="dt-balspacer"></span>
+            <button type="button" class="dt-mini bal-prev" aria-label="Earlier days">&larr; Earlier</button>
+            <button type="button" class="dt-mini bal-next" aria-label="Later days">Later &rarr;</button>
+          </div>
+          <div class="bal-svg"></div>
+          <p class="dt-ballegend"><span><i class="lg ln"></i> Account balance</span> <span><i class="lg ln sp"></i> Same money in the S&amp;P 500</span> <span><i class="lg buy"></i> Buy</span> <span><i class="lg sell win"></i> Sell at a profit</span> <span><i class="lg sell loss"></i> Sell at a loss</span> <span class="hint bal-range"></span></p>
+          <p class="hint dt-baldetail bal-detail" aria-live="polite">Tap or click a marker to see that trade.</p>
+        </div>
+        <p class="hint dt-ex">The balance only changes when a trade is sold, so it steps up or down at each green or red triangle; blue triangles are buys. It uses your starting balance and only the trades the account had cash for. With the balance box empty it shows the running profit from every signal instead. It draws as the scan runs and, when it finishes, opens on the widest range with a readable number of markers; use the buttons to zoom or page through time. The orange line is the same money held in SPY: from the start of the data it is the true value, and when you zoom into a later range it is rebased to your balance at the start of that range, so the two lines compare like with like.</p>
 
         <h3>By sector</h3>
         <div class="table-wrap">
