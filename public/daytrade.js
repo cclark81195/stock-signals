@@ -60,7 +60,7 @@ function renderTiles(a, equity) {
     tile("Worst drawdown", `−${a.maxDrawdownR.toFixed(1)}R`, "peak to trough", "",
       "The biggest fall from a high point in the running total. It shows how deep the worst stretch got. Ask whether you could stay with the plan through it."),
     tile("Hit the target", pct0(hitTarget), otherExits || "no other exits", "",
-      "How many trades reached the profit target. The line below counts the rest: stops, gaps through the stop, and end-of-day exits."),
+      "How many trades reached the profit target. The line above counts the rest: stops, gaps through the stop, and end-of-day exits."),
   ].join("");
 }
 
