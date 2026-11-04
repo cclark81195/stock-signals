@@ -81,6 +81,10 @@ How to read it: the whole-index and sector rows are the test; the ranked stock l
 
 Not verified: how Robinhood handles fractional-share orders (whether limit orders, attached stop-losses and extended hours are supported, and its minimum order). The safety rules here require limit orders with a protective stop, so check this against the real account and the MCP's tool list before any live stage.
 
+## Account balance chart
+
+Under the cumulative-R chart, "Account balance, with every buy and sell" starts from the account size and steps at each sold trade by that trade's dollar result. Up triangles are buys; down triangles are sells (green profit, red loss). Overnight and weekend gaps are squeezed out of the time axis so a day's trading is readable; use 1 day / 5 days / 20 days / All and Earlier / Later to zoom, and click a marker for the trade's details. Overlapping trades on different stocks are added to one balance as if there were enough money for all of them, and nothing compounds. The API returns up to 1,500 trades (newest first); the chart says when it is showing a subset.
+
 ## Known limits
 
 - Each symbol is backtested independently; the live guard is portfolio-wide, so the real bot will trade less than the backtest implies.

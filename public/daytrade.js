@@ -185,6 +185,7 @@ function render(data, equity) {
   renderByClass(data);
   renderBySetup(a);
   renderTrades(data.recentTrades, data.tradesTotal ?? data.recentTrades.length);
+  renderBalance(data.recentTrades, data.config.equity, data.tradesTotal ?? data.recentTrades.length);
   $("dt-results").hidden = false;
   $("dt-updated").innerHTML = `Run at <strong>${new Date(data.generatedAt * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</strong>`;
 }
@@ -419,6 +420,186 @@ async function loadOptions() {
   spOptionsLoaded();
 }
 
+
+
+// ================================================================ account balance chart
+// Balance = account size + the dollar result of every sold trade so far. Buys and sells are placed on a
+// time axis where overnight and weekend gaps are squeezed out, so a day's trading looks like a day.
+const bal = { events: [], days: [], times: [], xOf: new Map(), equity: 0, win: null, offset: 0, total: 0, sel: -1 };
+const etDay = (ts) => new Date(ts * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+const dayLabel = (d) => { const [y, m, dd] = d.split("-").map(Number); return new Date(y, m - 1, dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+
+function balPrepare(trades, equity) {
+  const list = [...trades].sort((a, b) => a.entryTime - b.entryTime || a.exitTime - b.exitTime);
+  const events = [];
+  list.forEach((t, k) => {
+    events.push({ kind: "buy", time: t.entryTime, t, k });
+    events.push({ kind: "sell", time: t.exitTime, t, k });
+  });
+  // sells before buys at the same instant, so a freed-up balance is counted before the next buy
+  events.sort((a, b) => a.time - b.time || (a.kind === "sell" ? -1 : 1) - (b.kind === "sell" ? -1 : 1) || a.k - b.k);
+  let balance = equity;
+  for (const e of events) {
+    if (e.kind === "sell") balance += e.t.pnl;
+    e.balance = balance;
+    e.day = etDay(e.time);
+  }
+  // squeezed time axis: any gap over 8 hours counts as 30 minutes
+  const times = [...new Set(events.map((e) => e.time))].sort((a, b) => a - b);
+  const xOf = new Map();
+  let x = 0;
+  times.forEach((t, i) => {
+    if (i) { const dt = t - times[i - 1]; x += dt > 8 * 3600 ? 1800 : dt; }
+    xOf.set(t, x);
+  });
+  bal.events = events; bal.times = times; bal.xOf = xOf; bal.equity = equity;
+  bal.days = [...new Set(events.map((e) => e.day))].sort();
+}
+
+function renderBalance(trades, equity, total) {
+  const card = $("dt-balcard");
+  if (!trades || !trades.length) { card.hidden = true; return; }
+  card.hidden = false;
+  const first = !bal.events.length || bal.total !== total || bal.equity !== equity;
+  balPrepare(trades, equity);
+  bal.total = total;
+  if (bal.win == null || first) {
+    bal.win = bal.events.length <= 150 ? "all" : 5;
+    bal.offset = 0; bal.sel = -1;
+  }
+  balDraw();
+  $("dt-bal-note").textContent = total > trades.length ? `(newest ${trades.length} of ${total} trades)` : `(${trades.length} trades)`;
+}
+
+function balWindowDays() {
+  const n = bal.days.length;
+  const win = bal.win === "all" ? n : Math.min(bal.win, n);
+  const end = Math.max(win, n - bal.offset);
+  return { win, start: end - win, end };
+}
+
+function balDraw() {
+  const n = bal.days.length;
+  const { win, start, end } = balWindowDays();
+  const shownDays = bal.days.slice(start, end);
+  const dset = new Set(shownDays);
+  const ev = bal.events.filter((e) => dset.has(e.day));
+  const W = 720, H = 270, pl = 62, pr = 14, pt = 14, pb = 26;
+
+  // balance just before the first visible event
+  const firstIdx = bal.events.indexOf(ev[0]);
+  const startBal = firstIdx > 0 ? bal.events[firstIdx - 1].balance : bal.equity;
+  const x0 = bal.xOf.get(ev[0].time), x1 = bal.xOf.get(ev[ev.length - 1].time);
+  const span = Math.max(x1 - x0, 600);
+  const xa = x0 - span * 0.03, xb = x1 + span * 0.03;
+  const X = (t) => pl + ((bal.xOf.get(t) - xa) / (xb - xa)) * (W - pl - pr);
+
+  const vals = [startBal, ...ev.map((e) => e.balance)];
+  if (start === 0) vals.push(bal.equity);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi - lo < 1) { const c = (hi + lo) / 2; hi = c + 0.5; lo = c - 0.5; }
+  const padY = (hi - lo) * 0.1; hi += padY; lo -= padY;
+  const Y = (v) => pt + (1 - (v - lo) / (hi - lo)) * (H - pt - pb);
+
+  // step line: flat until a sell, then straight to the new balance
+  let cur = startBal;
+  let d = `M${pl},${Y(cur).toFixed(1)}`;
+  for (const e of ev) {
+    if (e.kind !== "sell") continue;
+    const px = X(e.time).toFixed(1);
+    d += ` L${px},${Y(cur).toFixed(1)} L${px},${Y(e.balance).toFixed(1)}`;
+    cur = e.balance;
+  }
+  d += ` L${W - pr},${Y(cur).toFixed(1)}`;
+
+  // day separators and labels
+  const byDay = new Map();
+  for (const e of ev) { if (!byDay.has(e.day)) byDay.set(e.day, []); byDay.get(e.day).push(e); }
+  const dayList = [...byDay.keys()];
+  const every = Math.max(1, Math.ceil(dayList.length / 7));
+  let seps = "", labels = "";
+  dayList.forEach((day, i) => {
+    const es = byDay.get(day);
+    const xs = es.map((e) => X(e.time));
+    const left = Math.min(...xs), right = Math.max(...xs);
+    if (i) { const prevRight = Math.max(...byDay.get(dayList[i - 1]).map((e) => X(e.time))); const mid = (prevRight + left) / 2; seps += `<line class="day" x1="${mid.toFixed(1)}" x2="${mid.toFixed(1)}" y1="${pt}" y2="${H - pb}"></line>`; }
+    if (i % every === 0) labels += `<text class="lbl" x="${((left + right) / 2).toFixed(1)}" y="${H - 7}" text-anchor="middle">${esc(dayLabel(day))}</text>`;
+  });
+
+  const r = ev.length <= 60 ? 6 : ev.length <= 200 ? 4.5 : 3.2;
+  const focusable = ev.length <= 150;
+  const markers = ev.map((e) => {
+    const cx = X(e.time), cy = Y(e.balance);
+    const up = e.kind === "buy";
+    const pts = up
+      ? `${cx.toFixed(1)},${(cy - r).toFixed(1)} ${(cx - r).toFixed(1)},${(cy + r * 0.8).toFixed(1)} ${(cx + r).toFixed(1)},${(cy + r * 0.8).toFixed(1)}`
+      : `${cx.toFixed(1)},${(cy + r).toFixed(1)} ${(cx - r).toFixed(1)},${(cy - r * 0.8).toFixed(1)} ${(cx + r).toFixed(1)},${(cy - r * 0.8).toFixed(1)}`;
+    const t = e.t;
+    const label = up
+      ? `Buy ${t.symbol}: ${qty(t.shares)} shares at ${price(t.entry)}, ${et(t.entryTime)}`
+      : `Sell ${t.symbol}: ${qty(t.shares)} shares at ${price(t.exit)}, ${et(t.exitTime)}, ${money(t.pnl)}`;
+    const id = bal.events.indexOf(e);
+    return `<polygon class="mk ${up ? "buy" : "sell " + (t.pnl > 0 ? "win" : "loss")}${id === bal.sel ? " sel" : ""}" points="${pts}" data-i="${id}"${focusable ? ' tabindex="0" role="button"' : ""} aria-label="${esc(label)}"><title>${esc(label)}</title></polygon>`;
+  }).join("");
+
+  const startLine = start === 0 && bal.equity >= lo && bal.equity <= hi
+    ? `<line class="start" x1="${pl}" x2="${W - pr}" y1="${Y(bal.equity).toFixed(1)}" y2="${Y(bal.equity).toFixed(1)}"></line>` : "";
+  $("dt-bal").innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="group" aria-label="Account balance over ${shownDays.length} trading day${shownDays.length === 1 ? "" : "s"} with ${ev.length} buy and sell markers">
+      <line class="grid" x1="${pl}" x2="${W - pr}" y1="${Y(hi).toFixed(1)}" y2="${Y(hi).toFixed(1)}"></line>
+      <line class="grid" x1="${pl}" x2="${W - pr}" y1="${Y(lo).toFixed(1)}" y2="${Y(lo).toFixed(1)}"></line>
+      ${startLine}${seps}
+      <path class="line" d="${d}"></path>
+      ${markers}
+      <text class="lbl" x="${pl - 6}" y="${Y(hi).toFixed(1)}" text-anchor="end" dominant-baseline="hanging">${money(hi).replace(/\.\d\d$/, "")}</text>
+      <text class="lbl" x="${pl - 6}" y="${Y(lo).toFixed(1)}" text-anchor="end">${money(lo).replace(/\.\d\d$/, "")}</text>
+      ${labels}
+    </svg>`;
+
+  // controls
+  document.querySelectorAll(".dt-balbar [data-win]").forEach((b) => {
+    const w = b.dataset.win === "all" ? "all" : Number(b.dataset.win);
+    b.setAttribute("aria-pressed", String(w === bal.win));
+  });
+  $("dt-bal-prev").disabled = start <= 0;
+  $("dt-bal-next").disabled = end >= n;
+  const endBal = ev[ev.length - 1].kind === "sell" ? ev[ev.length - 1].balance : cur;
+  $("dt-bal-range").textContent = `${dayLabel(shownDays[0])}${shownDays.length > 1 ? ` to ${dayLabel(shownDays[shownDays.length - 1])}` : ""} (${shownDays.length} of ${n} days). Balance ${money(startBal)} → ${money(endBal)}.`;
+}
+
+function balSelect(i) {
+  const e = bal.events[i];
+  if (!e) return;
+  bal.sel = i;
+  const t = e.t;
+  const buy = `Bought ${qty(t.shares)} ${t.symbol} at ${price(t.entry)} (${money(t.shares * t.entry)}) on ${et(t.entryTime)}`;
+  const sell = `sold at ${price(t.exit)} on ${et(t.exitTime)}, ${EXIT_NAMES[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${sgn(t.netR)}R)`;
+  $("dt-bal-detail").textContent = `${SETUP_NAMES[t.setup] || t.setup}. ${buy}; ${sell}. Balance after the sale: ${money(bal.events.find((x) => x.kind === "sell" && x.k === e.k).balance)}.`;
+  balDraw();
+  const m = $("dt-bal").querySelector(`[data-i="${i}"]`);
+  if (m && m.hasAttribute("tabindex")) m.focus();
+}
+
+function balInit() {
+  document.querySelectorAll(".dt-balbar [data-win]").forEach((b) => b.addEventListener("click", () => {
+    bal.win = b.dataset.win === "all" ? "all" : Number(b.dataset.win);
+    bal.offset = 0;
+    balDraw();
+  }));
+  const shift = (dir) => {
+    const { win, start, end } = balWindowDays();
+    const n = bal.days.length;
+    const newEnd = Math.min(n, Math.max(win, end + dir * win));
+    bal.offset = n - newEnd;
+    balDraw();
+  };
+  $("dt-bal-prev").addEventListener("click", () => shift(-1));
+  $("dt-bal-next").addEventListener("click", () => shift(1));
+  const pick = (e) => { const m = e.target.closest(".mk"); if (m) balSelect(Number(m.dataset.i)); };
+  $("dt-bal").addEventListener("click", pick);
+  $("dt-bal").addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.closest(".mk")) { e.preventDefault(); pick(e); } });
+}
+balInit();
 
 // ================================================================ S&P 500 scan
 // Runs the current settings on every S&P 500 stock, ten at a time (the API's per-run limit),
