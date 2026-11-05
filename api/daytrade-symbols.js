@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   if (sp) {
     for (const m of sp.members) {
       if (ETFS.some((e) => e.symbol === m.symbol)) continue;
-      options.push({ symbol: m.symbol, name: m.company || m.symbol, tag: m.sector || "S&P 500" });
+      options.push({ symbol: m.symbol, name: m.company || m.symbol, tag: m.sector || "S&P 500", ...(m.added ? { added: m.added } : {}) });
     }
   }
   res.setHeader("Cache-Control", sp ? "public, s-maxage=86400, stale-while-revalidate=86400" : "public, s-maxage=300");
