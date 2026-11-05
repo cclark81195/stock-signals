@@ -134,8 +134,8 @@
           </select>
           <span class="help dt-ex" id="h-moskip">The most recent month is left out of the ranking because last month's big winners tend to give some back. One month is the standard ("12-1" momentum).</span>
         </label>
-        <label class="check"><input id="s-mojoin" type="checkbox" checked aria-describedby="h-mojoin" /> Only rank a stock after it joined the S&amp;P 500
-          <span class="help dt-ex" id="h-mojoin">The stock list is today's S&amp;P 500, and many of its members were added because they had already rallied (for example SanDisk joined in late 2025). Letting the test buy them years earlier is hindsight and inflates results. With this on, a stock can only be ranked from the day it joined. Stocks that left the index are still missing, so some survivorship bias remains. Needs the join dates from the S&amp;P 500 list; stocks without one are always allowed.</span>
+        <label class="check"><input id="s-mojoin" type="checkbox" checked aria-describedby="h-mojoin" /> Only rank a stock while it was in the index
+          <span class="help dt-ex" id="h-mojoin">The stock lists are today's members, and many were added because they had already rallied (for example SanDisk joined in late 2025), while companies that fell out are missing. Letting the test buy them years early, and never own the ones that dropped out, inflates results. With this on, a stock can only be ranked from the day it joined until the day it left, using the index's own change history (the S&amp;P 500, 400 and 600 lists have one), and stocks that left are added back when Yahoo still has their prices. Stocks with no recorded date are always allowed, and bought-out or bankrupt companies usually have no prices, so some bias remains. Lists without any dates (Nasdaq-100, Russell) rely on the most-traded filter below instead.</span>
         </label>
         <label>Most holdings from one sector
           <input id="s-mosec" type="number" min="0" max="100" step="1" value="0" inputmode="numeric" aria-describedby="h-mosec" />
@@ -144,6 +144,10 @@
         <label>Keep a holding until it falls below rank
           <input id="s-mobuf" type="number" min="0" max="50" step="1" value="0" inputmode="numeric" aria-describedby="h-mobuf" />
           <span class="help dt-ex" id="h-mobuf">Extra places a holding may slip before it is sold. 0 swaps a stock the moment it is outside the top group; 5 keeps it until it is outside the top group plus five places. Higher means fewer trades and less cost.</span>
+        </label>
+        <label>Only rank the most-traded stocks (0 = all)
+          <input id="s-moliq" type="number" min="0" max="5000" step="50" value="0" inputmode="numeric" aria-describedby="h-moliq" />
+          <span class="help dt-ex" id="h-moliq">At every check, only the stocks with the highest average dollars traded per day over the previous 60 days can be ranked: 500 means the 500 most-traded stocks that day. It uses only what was known at the time, so it stops the test buying a small stock years before it grew into a big one. This is how to remove most of the hindsight from lists with no membership dates, like the Russell lists (picking one of those sets it to 500). 0 turns it off.</span>
         </label>
         <label>Trailing stop, % below the highest close (0 = off)
           <input id="s-mostop" type="number" min="0" max="90" step="1" value="0" inputmode="numeric" aria-describedby="h-mostop" />
@@ -222,10 +226,15 @@
       <label class="wide">Stock list
         <select id="s-universe" aria-describedby="h-universe">
           <option value="sp500">S&amp;P 500 stocks</option>
+          <option value="nasdaq100">Nasdaq-100 stocks</option>
           <option value="sp400">S&amp;P 400 mid-size stocks</option>
+          <option value="sp600">S&amp;P 600 small stocks</option>
+          <option value="russell1000">Russell 1000 stocks</option>
+          <option value="russell3000">Russell 3000 stocks (slow)</option>
           <option value="etfs">Sector, country and bond ETFs</option>
         </select>
-        <span class="help dt-ex" id="h-universe">What gets tested when the box below is blank. Every comparison on this page stays against the S&amp;P 500 (SPY), whichever list you pick. Mid-size stocks are less followed, so rankings can work better there, but they swing more and cost more to trade (raise the slippage). The ETF list has no stock-picking hindsight, because funds are not added to an index after a rally, so it is the fairest test of the ranking idea; the join-date setting does not apply to it. S&amp;P 400 membership dates are not in the list, so the same hindsight caveat as the S&amp;P 500 applies there, without the join-date fix.</span>
+        <span class="hint" id="s-universe-desc" aria-live="polite"></span>
+        <span class="help dt-ex" id="h-universe">What gets tested when the box below is blank. Every comparison on this page stays against the S&amp;P 500 (SPY), whichever list you pick. All lists except the ETFs are today's members, so they carry some hindsight (companies that dropped out are missing); only the S&amp;P 500 list has join dates to correct for part of that. Bigger lists take longer to download: the Russell 3000 is about six times the S&amp;P 500. Smaller companies cost more to trade, so raise the slippage for them.</span>
       </label>
       <label class="wide">Only these symbols (optional)
         <input id="s-symbols" type="text" placeholder="Leave blank for the whole stock list above, or type e.g. AAPL, MSFT, SPY" aria-describedby="h-symbols" />

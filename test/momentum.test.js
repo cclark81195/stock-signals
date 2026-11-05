@@ -216,3 +216,29 @@ test("account sizing honours a trade's size multiplier w", () => {
   const a = rep.takenList.find((t) => t.symbol === "A"), b = rep.takenList.find((t) => t.symbol === "B");
   assert.ok(Math.abs(a.size - 2500) < 1e-6 && Math.abs(b.size - 5000 * 1) < 1e-6 || a.size < b.size);
 });
+
+test("membership: a stock is not ranked after it left the index, and excluded stocks are never ranked", () => {
+  const closes = new Map([["A", grow(0.003)], ["B", grow(0.002)], ["C", grow(0.001)]]);
+  const left = dates[500];
+  const r = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 1, removed: new Map([["A", left]]) });
+  const a = r.trades.find((t) => t.symbol === "A");
+  assert.ok(a && a.exitReason === "dropped" && a.exitDate >= left, "sold after leaving");
+  assert.ok(r.trades.some((t) => t.symbol === "B"), "the next best takes over");
+  const ex = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 1, exclude: new Set(["A"]) });
+  assert.ok(ex.trades.every((t) => t.symbol !== "A"));
+});
+
+test("most-traded filter: only the N biggest by 60-day dollar volume that day can be ranked", () => {
+  const closes = new Map([["WIN", grow(0.003)], ["BIG", grow(0.002)], ["MID", grow(0.0015)]]);
+  const dvol = new Map([["WIN", dates.map(() => 1)], ["BIG", dates.map(() => 500)], ["MID", dates.map(() => 300)]]);
+  const on = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 1, liquidTop: 2, dvol });
+  assert.ok(on.trades.every((t) => t.symbol !== "WIN"), "the best performer is too thinly traded to be ranked");
+  assert.ok(on.trades.some((t) => t.symbol === "BIG"));
+  const off = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 1, dvol });
+  assert.ok(off.trades.some((t) => t.symbol === "WIN"), "off by default");
+  // a stock that becomes thin later is dropped
+  const fade = new Map([["WIN", dates.map((_, i) => (i < 500 ? 900 : 1))], ["BIG", dates.map(() => 500)], ["MID", dates.map(() => 300)]]);
+  const f = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 1, liquidTop: 2, dvol: fade });
+  const w = f.trades.find((t) => t.symbol === "WIN");
+  assert.ok(w && w.exitReason === "dropped");
+});

@@ -67,6 +67,8 @@ const median = (a) => { const b = [...a].sort((x, y) => x - y); return b.length 
  * opts: score "momentum"|"dip", every "month"|"week"|"day", topN, buffer (a holding is kept until it ranks below topN + buffer),
  *       minScore (a stock must score above this to be bought), lookback/skip (days, momentum), slipBps, spyFilter,
  *       joined (Map symbol -> "YYYY-MM-DD": a stock is only ranked once it was in the index), sectors (Map symbol -> sector) with
+ *       removed (Map symbol -> "YYYY-MM-DD": not ranked from the day it left the index), exclude (Set of symbols never ranked),
+ *       liquidTop + dvol (Map symbol -> 60-day average dollar volume per day): each check ranks only the liquidTop most-traded stocks that day; 0 = off,
  *       sectorCap (at most this many holdings from one sector; 0 = no limit),
  *       trailStop (percent: sell a holding whose close falls this far below its highest close since it was bought; 0 = off; the
  *       decision uses that day's close and the sale fills at the NEXT close, and the stock is locked out for 21 days),
@@ -107,6 +109,9 @@ export function buildRotation(dates, closes, spy, opts = {}) {
     if (!(series[fillIdx] > 0)) return null;
     const since = o.joined && o.joined.get(sym);
     if (since && dates[s] < since) return null;                       // not yet a member of the index that day
+    const until = o.removed && o.removed.get(sym);
+    if (until && dates[s] >= until) return null;                      // already dropped from the index
+    if (o.exclude && o.exclude.has(sym)) return null;
     if (o.score === "dip") return dip.get(sym).z[s];
     const a = series[s - o.lookback], b = series[s - o.skip];
     return a > 0 && b > 0 ? b / a - 1 : null;
@@ -115,6 +120,11 @@ export function buildRotation(dates, closes, spy, opts = {}) {
   const leaderboard = (s, fillIdx) => {
     const list = [];
     for (const sym of syms) { const sc = scoreOf(sym, s, fillIdx); if (sc != null) list.push([sym, sc]); }
+    if (o.liquidTop > 0 && o.dvol) {                                  // only the most-traded stocks as of that day (60-day dollar volume)
+      const ok = new Set(list.map(([sym]) => [sym, (o.dvol.get(sym) || [])[s]]).filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, o.liquidTop).map(([sym]) => sym));
+      return list.filter(([sym]) => ok.has(sym)).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+    }
     return list.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
   };
   /** The stocks worth buying: scoring above the minimum. */

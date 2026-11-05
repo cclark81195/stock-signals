@@ -463,3 +463,71 @@ test("symbols api: ?list=etfs returns the ETF list without SPY or crypto rows", 
   assert.equal(out.b.loaded, true);
   assert.ok(out.b.options.length >= 40 && out.b.options.every((o) => o.tag && o.tag !== "Crypto" && o.symbol !== "SPY"));
 });
+
+test("iShares holdings file: skips header lines, cash and futures, cleans tickers, drops duplicates", async () => {
+  const { parseIsharesHoldings } = await import("../lib/russell.js");
+  const csv = `iShares Russell 1000 ETF\nFund Holdings as of,"Nov 03, 2026"\n\n﻿` + `Ticker,Name,Sector,Asset Class,Market Value,Weight (%)\n"AAPL","APPLE INC","Information Technology","Equity","1","6.0"\n"BRKB","BERKSHIRE","Financials","Equity","1","1.0"\n"BRK.B","BERKSHIRE B","Financials","Equity","1","1.0"\n"AAPL","DUP","Information Technology","Equity","1","1"\n"USD","USD CASH","Cash and/or Derivatives","Cash","1","0.1"\n"ESZ6","FUTURE","Cash and/or Derivatives","Futures","1","0"\n"-","LINE","-","Equity","1","0"\n"XYZ","NO SECTOR","-","Equity","1","0.1"\n`;
+  const r = parseIsharesHoldings(csv);
+  assert.deepEqual(r.map((x) => x.symbol), ["AAPL", "BRK-B", "BRKB", "XYZ"]);
+  assert.equal(r.find((x) => x.symbol === "XYZ").sector, "Other");
+  assert.throws(() => parseIsharesHoldings("nothing useful"));
+});
+
+// ---- index change history (join and exit dates)
+test("changes table: dates, added and removed tickers, shared dates, tables without both columns ignored", async () => {
+  const { parseChangesTable, longDate } = await import("../lib/constituents.js");
+  assert.equal(longDate("February 9, 2026"), "2026-02-09");
+  assert.equal(longDate("Sept. 5, 2019"), "");            // unknown month spelling is skipped rather than guessed
+  assert.equal(longDate("n/a"), "");
+  const html = `<table><tr><th>Symbol</th><th>Security</th></tr><tr><td>AAA</td><td>Other table</td></tr></table>
+  <table class="wikitable"><tbody><tr><th rowspan=2>Date</th><th colspan=2>Added</th><th colspan=2>Removed</th><th rowspan=2>Reason</th></tr>
+  <tr><th>Ticker</th><th>Security</th><th>Ticker</th><th>Security</th></tr>
+  <tr><td>February 9, 2026</td><td>ARWR</td><td>Arrowhead</td><td>CIEN</td><td>Ciena</td><td>Cap change.</td></tr>
+  <tr><td rowspan=2>January 5, 2026</td><td>BROS</td><td>Dutch Bros</td><td>PCH</td><td>Potlatch</td><td>Acquired.</td></tr>
+  <tr><td>AEIS</td><td>Advanced Energy</td><td>BRK.B</td><td>Berkshire</td><td>Merger.</td></tr>
+  <tr><td>March 1, 2025</td><td></td><td></td><td>OLD</td><td>Old Co</td><td>Cut.</td></tr></tbody></table>`;
+  const c = parseChangesTable(html);
+  assert.deepEqual(c, [
+    { date: "2026-02-09", added: "ARWR", removed: "CIEN" },
+    { date: "2026-01-05", added: "BROS", removed: "PCH" },
+    { date: "2026-01-05", added: "AEIS", removed: "BRK-B" },
+    { date: "2025-03-01", added: "", removed: "OLD" },
+  ]);
+  assert.deepEqual(parseChangesTable("<table><tr><td>nothing</td></tr></table>"), []);
+});
+
+test("applyChanges: current members get their latest add date, removed stocks come back as former members", async () => {
+  const { applyChanges } = await import("../lib/constituents.js");
+  const members = [{ symbol: "AAA", company: "A", sector: "Tech", added: "" }, { symbol: "BBB", company: "B", sector: "Tech", added: "1999-01-01" }, { symbol: "BACK", company: "Back", sector: "Tech", added: "" }];
+  const changes = [
+    { date: "2024-06-01", added: "AAA", removed: "GONE" },
+    { date: "2022-03-01", added: "GONE", removed: "BACK" },
+    { date: "2023-01-01", added: "BACK", removed: "" },
+    { date: "2020-01-01", added: "AAA", removed: "" },
+    { date: "2019-05-05", added: "BBB", removed: "OLDX" },
+  ];
+  const r = applyChanges(members, changes);
+  assert.equal(r.members.find((m) => m.symbol === "AAA").added, "2024-06-01", "latest addition");
+  assert.equal(r.members.find((m) => m.symbol === "BBB").added, "1999-01-01", "an existing date is kept");
+  assert.equal(r.members.find((m) => m.symbol === "BACK").added, "2023-01-01", "re-added: back in the index, not a former member");
+  assert.deepEqual(r.former.map((f) => f.symbol), ["GONE", "OLDX"]);
+  const gone = r.former.find((f) => f.symbol === "GONE");
+  assert.equal(gone.removed, "2024-06-01"); assert.equal(gone.added, "2022-03-01"); assert.equal(gone.former, true);
+  assert.equal(r.former.find((f) => f.symbol === "OLDX").added, "", "joined before the table starts: unknown");
+});
+
+test("symbols api: ?list=sp400 returns former members flagged, with their dates (stubbed fetch)", async () => {
+  const realFetch = globalThis.fetch;
+  const rows = Array.from({ length: 360 }, (_, i) => `<tr><td>M${i}</td><td>Co ${i}</td><td>Industrials</td><td>x</td><td>x</td><td>x</td></tr>`).join("");
+  const page = `<table id="constituents"><tr><th>Symbol</th><th>Security</th><th>GICS Sector</th><th>GICS Sub-Industry</th><th>Headquarters Location</th><th>SEC filings</th></tr>${rows}</table>
+    <table><tr><th>Date</th><th>Added</th><th>Added</th><th>Removed</th><th>Removed</th><th>Reason</th></tr><tr><td>June 3, 2024</td><td>M1</td><td>Co 1</td><td>FORMR</td><td>Former</td><td>x</td></tr></table>`;
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => page });
+  try {
+    const { default: handler } = await import("../api/daytrade-symbols.js");
+    const out = {};
+    await handler({ query: { list: "sp400" } }, { setHeader() {}, status(c) { out.c = c; return this; }, json(x) { out.b = x; } });
+    assert.equal(out.b.loaded, true); assert.equal(out.b.stockCount, 360); assert.equal(out.b.formerCount, 1);
+    assert.deepEqual(out.b.options.find((o) => o.symbol === "FORMR"), { symbol: "FORMR", name: "FORMR", tag: "Other", removed: "2024-06-03", former: true });
+    assert.equal(out.b.options.find((o) => o.symbol === "M1").added, "2024-06-03");
+  } finally { globalThis.fetch = realFetch; }
+});
