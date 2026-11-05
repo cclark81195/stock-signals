@@ -1,6 +1,7 @@
 // Swing Lab - front end (no build step, no dependencies)
-import { replayAccount } from "./swing-account.js";
+import { replayAccount, replayPark } from "./swing-account.js";
 import { makeTradeChart } from "./swing-chart.js";
+import { makeMixChart } from "./swing-mix.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -14,7 +15,7 @@ const STRATEGY_NAMES = { meanrev: "Buy sharp dips", breakout: "Buy new highs" };
 const EXIT_NAMES = { signal: "Exit signal", stop: "Stop", "stop-gap": "Gap through stop", time: "Time limit", "data-end": "Still open at the end" };
 
 const STORE_KEY = "swing-lab-settings";
-const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", borrow: "s-borrow", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
+const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", park: "s-park", parkRate: "s-parkrate", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", borrow: "s-borrow", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
 const CHECKS = { trend: "s-trend", mkt: "s-mkt", bbShort: "s-bbshort" };
 const SW_BATCH = 25, SW_PARALLEL = 2;
 
@@ -131,11 +132,32 @@ const pctFmt = (x, d = 2) => (x == null ? "-" : `${x > 0 ? "+" : x < 0 ? "−" :
 const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
 
 /**
+ * The one-account replay shared by the comparison and both charts: starts with the balance, parks the money that is not
+ * in a trade (SPY, a yearly rate, or plain cash), funds each signal from it. null without a starting balance or SPY prices.
+ */
+function buildAccount(rows) {
+  const balance = Number($("s-balance").value) || 0;
+  if (balance <= 0 || !sw.bench || !sw.bench.length || !rows.length) return null;
+  const start = rows.map((r) => r.testStart).filter(Boolean).sort()[0];
+  if (!start) return null;
+  const i0 = Math.max(1, sw.bench.findIndex(([d]) => d >= start));
+  const baseClose = sw.bench[i0 - 1][1];
+  const bars = sw.bench.slice(i0);
+  if (bars.length < 20) return null;
+  const mode = $("s-park").value, rate = Math.max(0, Number($("s-parkrate").value) || 0) / 100;
+  const growth = bars.map(([, c], i) => (mode === "spy" ? c / (i ? bars[i - 1][1] : baseClose) : mode === "rate" ? Math.pow(1 + rate, 1 / 252) : 1));
+  const dayList = bars.map(([d]) => d);
+  const rep = replayPark(rows, balance, sw.dollars, dayList, growth);
+  const parkName = mode === "spy" ? "S&P 500 (SPY)" : mode === "rate" ? `Idle cash at ${(rate * 100).toFixed(1)}% a year` : "Cash";
+  return { balance, mode, rate, bars, baseClose, dayList, rep, parkName, spyOnly: bars.map(([, c]) => (balance * c) / baseClose) };
+}
+
+/**
  * The strategy against SPY over the same days.
- *  - With a starting balance: one real account (limited cash, realised profit counted when a trade is sold).
+ *  - With a starting balance: one real account (limited cash, realised profit counted when a trade is sold, idle money parked).
  *  - Without one: every signal is taken and each stock tested gets its own slot of "dollars per buy".
  */
-function computeVs(rows) {
+function computeVs(rows, acct) {
   if (!sw.bench || !sw.bench.length || !rows.length) return null;
   const start = rows.map((r) => r.testStart).filter(Boolean).sort()[0];
   if (!start) return null;
@@ -145,13 +167,15 @@ function computeVs(rows) {
   if (bars.length < 20) return null;
   const balance = Number($("s-balance").value) || 0;
   const account = balance > 0;
+  if (account && !acct) return null;
   const dayList = bars.map(([d]) => d);
 
   let strat, extra = {};
   if (account) {
-    const rep = replayAccount(rows, balance, sw.dollars, dayList);
+    const rep = acct.rep;
     strat = rep.equity.map((e, i) => e / (i ? rep.equity[i - 1] : balance) - 1);
-    extra = { equity: rep.equity, taken: rep.taken, skipped: rep.skipped, maxOpen: rep.maxOpen, balance };
+    const inStocks = rep.equity.map((e, i) => (e > 0 ? (rep.held[i].length * sw.dollars) / e : 0));
+    extra = { equity: rep.equity, taken: rep.taken, skipped: rep.skipped, maxOpen: rep.maxOpen, balance, mode: acct.mode, rate: acct.rate, avgInStocks: mean(inStocks) };
   } else {
     const capital = rows.length * sw.dollars;
     strat = dayList.map((d) => (sw.dailyPnl[d] || 0) / capital);
@@ -178,8 +202,9 @@ function computeVs(rows) {
   const totalSpy = days[days.length - 1].c / baseClose - 1;
   const span = days.length / 252;
   const cagr = (t) => (1 + t > 0 ? Math.pow(1 + t, 1 / span) - 1 : -1);
+  const yearsAhead = basis.filter((y) => y.strat > y.spy).length;
   return {
-    account, years: yr, usedFull: basis === full, nYears: basis.length, span, start, end: days[days.length - 1].date,
+    account, yearsAhead, years: yr, usedFull: basis === full, nYears: basis.length, span, start, end: days[days.length - 1].date,
     dates: dayList, spyClose: days.map((d) => d.c), baseClose, ...extra,
     avgAnnualStrat: mean(basis.map((y) => y.strat)), avgAnnualSpy: mean(basis.map((y) => y.spy)),
     avgDailyStrat: mean(days.map((d) => d.strat)), avgDailySpy: mean(days.map((d) => d.spy)),
@@ -187,8 +212,8 @@ function computeVs(rows) {
   };
 }
 
-function renderVs(rows) {
-  const v = computeVs(rows);
+function renderVs(rows, acct) {
+  const v = computeVs(rows, acct);
   sw.vs = v;
   const box = $("sw-vs");
   if (!v) {
@@ -208,14 +233,26 @@ function renderVs(rows) {
       `The account can hold at most ${Math.floor(v.balance / sw.dollars)} buys at a time (balance divided by dollars per buy). When more signals appear than that, the extra ones are skipped, so the account's results differ from the "every signal" numbers above. A bigger balance or a smaller buy size means fewer skipped signals.`));
   }
   tiles.push(
-    tile("Average annual return", pctFmt(v.avgAnnualStrat), `S&P 500: ${pctFmt(v.avgAnnualSpy)}`, cls(v.avgAnnualStrat), `Average of ${v.nYears} ${v.usedFull ? "full " : ""}calendar year${v.nYears === 1 ? "" : "s"}. ${diff(v.avgAnnualStrat, v.avgAnnualSpy)}. The money is mostly idle, so this is the return on all of it, not only the part that was invested.`),
+    tile("Average annual return", pctFmt(v.avgAnnualStrat), `S&P 500: ${pctFmt(v.avgAnnualSpy)}`, cls(v.avgAnnualStrat), `Average of ${v.nYears} ${v.usedFull ? "full " : ""}calendar year${v.nYears === 1 ? "" : "s"}. ${diff(v.avgAnnualStrat, v.avgAnnualSpy)}. ${v.account && v.mode !== "cash" ? "This is the return on the whole portfolio: the idle money plus the trades." : "The money is mostly idle, so this is the return on all of it, not only the part that was invested."}`),
     tile("Average daily return", pctFmt(v.avgDailyStrat, 3), `S&P 500: ${pctFmt(v.avgDailySpy, 3)}`, cls(v.avgDailyStrat), "The average return per trading day over the whole window. Multiply by about 252 for a rough yearly figure."),
     tile("Compound growth per year", pctFmt(v.cagrStrat), `S&P 500: ${pctFmt(v.cagrSpy)}`, cls(v.cagrStrat), "The whole window's total return turned into a steady yearly rate, which handles part years correctly."),
     tile("Total return", pctFmt(v.totalStrat, 1), `S&P 500: ${pctFmt(v.totalSpy, 1)}`, cls(v.totalStrat), `Over ${v.span.toFixed(1)} years, ${v.start} to ${v.end}.`),
   );
+  if (v.account) {
+    const edge = v.cagrStrat - v.cagrSpy, endBal = v.equity[v.equity.length - 1], spyEnd = (v.balance * v.spyClose[v.spyClose.length - 1]) / v.baseClose;
+    tiles.push(
+      tile("Edge over the S&P 500", `${edge >= 0 ? "+" : "−"}${Math.abs(edge * 100).toFixed(2)} pts`, "compound growth per year, portfolio minus S&P 500", cls(edge),
+        v.mode === "spy" ? "Your goal in one number: how many percentage points a year the portfolio grew faster (or slower) than just holding SPY. With idle money in SPY, this is what trading on top of SPY added." : "How many percentage points a year the portfolio grew faster (or slower) than the S&P 500."),
+      tile("Years ahead of the S&P 500", `${v.yearsAhead} of ${v.nYears}`, v.usedFull ? "full calendar years" : "calendar years", cls(v.yearsAhead / v.nYears - 0.5), "In how many calendar years the portfolio's return beat SPY's. Beating it consistently is more convincing than one big year."),
+      tile("Ahead of SPY by", money(endBal - spyEnd), "ending balance minus the same money held in SPY", cls(endBal - spyEnd), "Dollars at the end compared with leaving the starting balance in SPY. Price only: SPY's dividends are not counted on either side."),
+      tile("Share held in stocks", `${((v.avgInStocks || 0) * 100).toFixed(1)}%`, "of the portfolio, on average", "", "How much of the portfolio sat in trades rather than in the idle money, averaged over all days. Small numbers mean the portfolio is mostly the idle money's return."),
+    );
+  }
   $("sw-vs-tiles").innerHTML = tiles.join("");
+  const idle = v.mode === "spy" ? "idle money held in SPY (SPY is sold to fund each buy at that day's close and bought back when the trade is sold; dividends not counted)"
+    : v.mode === "rate" ? `idle money earning ${(v.rate * 100).toFixed(1)}% a year` : "idle cash earning nothing";
   $("sw-vs-note").textContent = v.account
-    ? `Strategy: one account starting with ${money(v.balance)}, ${money(sw.dollars)} per buy, profit counted when a trade is sold, idle cash earning nothing. S&P 500: the same money in SPY, price only.`
+    ? `Strategy: one account starting with ${money(v.balance)}, ${money(sw.dollars)} per buy, profit counted when a trade is sold, ${idle}. S&P 500: the same money in SPY, price only.`
     : `Strategy: ${money(v.capital)} set aside (one ${money(sw.dollars)} slot per stock, every signal taken), idle cash earning nothing. S&P 500: SPY price only. Enter a starting balance above to test a single account with limited cash.`;
 }
 
@@ -283,21 +320,32 @@ function renderTrades(trades) {
 const tradeChart = makeTradeChart($("sw-balcard"), { esc, money, sgn, price, qty, exitNames: EXIT_NAMES });
 
 /** The balance chart with a marker per buy and sell. Redrawn after every batch, so it grows as the scan runs. */
-function renderTradeChart(rows, all, final) {
+function renderTradeChart(rows, all, final, acct) {
   const balance = Number($("s-balance").value) || 0;
   if (!all.length) { tradeChart.render([], 0); return; }
   if (balance <= 0) { tradeChart.render(all, 0, { settle: final, title: "Profit and loss, with every buy and sell (every signal, no cash limit)" }); return; }
-  const dates = [...new Set(all.flatMap((t) => [t.date, t.exitDate]))].sort();
-  const { takenList } = replayAccount(rows, balance, sw.dollars, dates);
-  let spy = null;
-  if (sw.bench && sw.bench.length) {
-    const start = rows.map((r) => r.testStart).filter(Boolean).sort()[0];
-    const i0 = Math.max(1, sw.bench.findIndex(([d]) => d >= start));
-    const base = sw.bench[i0 - 1][1];
-    const map = new Map(sw.bench);
-    spy = { close: (date) => (map.has(date) ? map.get(date) : null), base };
+  let takenList, spy = null, valueAt = null, title = "Account balance, with every buy and sell";
+  if (acct) {
+    takenList = acct.rep.takenList;
+    const closes = new Map(sw.bench);
+    spy = { close: (date) => (closes.has(date) ? closes.get(date) : null), base: acct.baseClose };
+    if (acct.mode !== "cash") {
+      const value = new Map(acct.dayList.map((d, i) => [d, acct.rep.equity[i]]));
+      valueAt = (date) => (value.has(date) ? value.get(date) : null);
+      title = "Portfolio value, with every buy and sell";
+    }
+  } else {
+    const dates = [...new Set(all.flatMap((t) => [t.date, t.exitDate]))].sort();
+    takenList = replayAccount(rows, balance, sw.dollars, dates).takenList;
   }
-  tradeChart.render(takenList, balance, { spy, settle: final, title: "Account balance, with every buy and sell" });
+  tradeChart.render(takenList, balance, { spy, valueAt, settle: final, title });
+}
+
+const mixChart = makeMixChart($("sw-mixcard"), { esc, money });
+function renderMix(acct) {
+  if (!acct || !acct.rep.takenList.length) { mixChart.render(null); return; }
+  const r = acct.rep;
+  mixChart.render({ dates: acct.dayList, equity: r.equity, park: r.park, held: r.held, spyOnly: acct.spyOnly, dollars: sw.dollars, parkName: acct.parkName });
 }
 
 function render(final = false) {
@@ -305,7 +353,8 @@ function render(final = false) {
   if (!rows.length) { $("sw-results").hidden = true; return; }
   $("sw-results").hidden = false;
   const all = sum(rows), first = sum(rows, "first"), second = sum(rows, "second");
-  if (final) renderVs(rows);
+  const acct = buildAccount(rows);
+  if (final) renderVs(rows, acct);
   renderTiles(rows, all, first, second);
   renderDiag(rows, all);
 
@@ -326,7 +375,8 @@ function render(final = false) {
   const trades = rows.flatMap((r) => r.trades || []);
   let cum = 0;
   renderCurve([...trades].sort((a, b) => a.exitTime - b.exitTime).map((t) => { cum += t.netR; return { cumR: Math.round(cum * 100) / 100, date: t.exitDate }; }));
-  renderTradeChart(rows, trades, final);
+  renderTradeChart(rows, trades, final, acct);
+  renderMix(acct);
   renderTrades(trades);
   const n = sw.failed.length;
   $("sw-failed").hidden = !n;
@@ -358,7 +408,7 @@ async function run(only = null) {
   const universe = typed.length ? typed : sw.stocks.map((x) => x.symbol);
   if (!universe.length) { $("sw-status").className = "status error"; $("sw-status").textContent = "The stock list has not loaded yet. Type some symbols above or reload the page."; return; }
   const symbols = only || universe;
-  if (!only) { sw.rows.clear(); sw.dailyPnl = {}; tradeChart.reset(); }
+  if (!only) { sw.rows.clear(); sw.dailyPnl = {}; tradeChart.reset(); mixChart.reset(); }
   sw.bench = null; sw.benchErr = false; sw.vs = null;
   const benchP = fetch(`/api/swing?bench=1&years=${encodeURIComponent(s.years)}`).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || r.status); sw.bench = d.bench; })).catch(() => { sw.benchErr = true; });
   sw.failed = []; sw.running = true; sw.cancel = false;
@@ -432,8 +482,12 @@ async function loadStocks() {
 }
 
 $("s-strategy").addEventListener("change", showStrategy);
-// The balance is only used on this page, so changing it updates the comparison without a new run.
-$("s-balance").addEventListener("change", () => { if (!sw.running && sw.rows.size) { sw.dollars = Number($("s-dollars").value) || sw.dollars; render(true); } });
+const showPark = () => { $("sw-parkrate-wrap").hidden = $("s-park").value !== "rate"; };
+// The balance and what idle money does are only used on this page, so changing them updates the results without a new run.
+const rerender = () => { if (!sw.running && sw.rows.size) { sw.dollars = Number($("s-dollars").value) || sw.dollars; render(true); } };
+$("s-balance").addEventListener("change", rerender);
+$("s-park").addEventListener("change", () => { showPark(); rerender(); });
+$("s-parkrate").addEventListener("change", rerender);
 $("sw-form").addEventListener("submit", (e) => { e.preventDefault(); run(); });
 $("sw-run").addEventListener("click", () => run());
 $("sw-cancel").addEventListener("click", () => { sw.cancel = true; $("sw-status").textContent = "Stopping after the batches already running..."; });
@@ -454,6 +508,7 @@ document.querySelectorAll("#sw-table th.sortable").forEach((th) => {
 
 loadSettings();
 showStrategy();
+showPark();
 loadStocks();
 
 (function wireExplain() {

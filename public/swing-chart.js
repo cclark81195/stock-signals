@@ -6,7 +6,7 @@ export function makeTradeChart(card, h) {
   const box = q(".bal-svg");
   const WINDOWS = { 21: "1 month", 63: "3 months", 252: "1 year", all: "All" };
   const MAX_MARKERS = 300;
-  const bal = { events: [], days: [], dayIdx: new Map(), start: 0, spy: null, win: "all", offset: 0, sel: -1, picked: false, label: "" };
+  const bal = { events: [], days: [], dayIdx: new Map(), start: 0, spy: null, valueAt: null, win: "all", offset: 0, sel: -1, picked: false, label: "" };
 
   function prepare(trades, start) {
     const events = [];
@@ -15,6 +15,8 @@ export function makeTradeChart(card, h) {
     events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.k === b.k ? (a.kind === "buy" ? -1 : 1) : (a.kind === "sell" ? -1 : 1) - (b.kind === "sell" ? -1 : 1) || a.k - b.k));
     let balance = start;
     for (const e of events) { if (e.kind === "sell") balance += e.t.pnl; e.balance = balance; }
+    // with parked money the portfolio value is known for every day, not only after a sale
+    if (bal.valueAt) for (const e of events) { const v = bal.valueAt(e.date); if (v != null) e.balance = v; }
     bal.events = events; bal.start = start;
     bal.days = [...new Set(events.map((e) => e.date))].sort();
     bal.dayIdx = new Map(bal.days.map((d, i) => [d, i]));
@@ -48,7 +50,7 @@ export function makeTradeChart(card, h) {
     const ev = bal.events.filter((e) => dset.has(e.date));
     const W = 720, H = 270, pl = 62, pr = 14, pt = 14, pb = 26;
     const firstIdx = bal.events.indexOf(ev[0]);
-    const startBal = firstIdx > 0 ? bal.events[firstIdx - 1].balance : bal.start;
+    const startBal = bal.valueAt ? (start > 0 ? (bal.valueAt(bal.days[start - 1]) ?? bal.start) : bal.start) : firstIdx > 0 ? bal.events[firstIdx - 1].balance : bal.start;
     const X = (date) => pl + ((bal.dayIdx.get(date) - start + 0.5) / Math.max(1, end - start)) * (W - pl - pr);
 
     // S&P 500 line: from the very start it is the true value of the same money; zoomed into a later range it is rebased to the
@@ -66,16 +68,23 @@ export function makeTradeChart(card, h) {
     const padY = (hi - lo) * 0.1; hi += padY; lo -= padY;
     const Y = (v) => pt + (1 - (v - lo) / (hi - lo)) * (H - pt - pb);
 
-    // step line: flat until a sale, then straight to the new balance
-    let cur = startBal;
-    let d = `M${pl},${Y(cur).toFixed(1)}`;
-    for (const e of ev) {
-      if (e.kind !== "sell") continue;
-      const px = X(e.date).toFixed(1);
-      d += ` L${px},${Y(cur).toFixed(1)} L${px},${Y(e.balance).toFixed(1)}`;
-      cur = e.balance;
+    let cur = startBal, d;
+    if (bal.valueAt) {
+      // daily line: the parked money moves every day
+      const pts = shown.map((dt) => [dt, bal.valueAt(dt)]).filter(([, v]) => v != null);
+      d = pts.length ? `M${pl},${Y(startBal).toFixed(1)} ` + pts.map(([dt, v]) => `L${X(dt).toFixed(1)},${Y(v).toFixed(1)}`).join(" ") : `M${pl},${Y(cur).toFixed(1)}`;
+      if (pts.length) cur = pts[pts.length - 1][1];
+    } else {
+      // step line: flat until a sale, then straight to the new balance
+      d = `M${pl},${Y(cur).toFixed(1)}`;
+      for (const e of ev) {
+        if (e.kind !== "sell") continue;
+        const px = X(e.date).toFixed(1);
+        d += ` L${px},${Y(cur).toFixed(1)} L${px},${Y(e.balance).toFixed(1)}`;
+        cur = e.balance;
+      }
+      d += ` L${W - pr},${Y(cur).toFixed(1)}`;
     }
-    d += ` L${W - pr},${Y(cur).toFixed(1)}`;
     const spyLine = spyPts.length > 1 ? `<polyline class="spy" points="${spyPts.map(([dt, v]) => `${X(dt).toFixed(1)},${Y(v).toFixed(1)}`).join(" ")}"></polyline>` : "";
 
     const every = Math.max(1, Math.ceil(shown.length / 6));
@@ -107,7 +116,7 @@ export function makeTradeChart(card, h) {
     card.querySelectorAll(".bal-win").forEach((b) => { const w = b.dataset.win === "all" ? "all" : Number(b.dataset.win); b.setAttribute("aria-pressed", String(w === bal.win)); });
     q(".bal-prev").disabled = start <= 0;
     q(".bal-next").disabled = end >= n;
-    const endBal = ev.length && ev[ev.length - 1].kind === "sell" ? ev[ev.length - 1].balance : cur;
+    const endBal = bal.valueAt ? cur : ev.length && ev[ev.length - 1].kind === "sell" ? ev[ev.length - 1].balance : cur;
     q(".bal-range").textContent = `${shown[0]}${shown.length > 1 ? ` to ${shown[shown.length - 1]}` : ""} (${shown.length} of ${n} days with trades). ${bal.start ? "Balance" : "Profit"} ${money(startBal)} → ${money(endBal)}.`
       + (showMarkers ? "" : ` ${ev.length.toLocaleString("en-US")} buys and sells are too many to draw: choose a shorter range to see each one.`);
   }
@@ -118,16 +127,17 @@ export function makeTradeChart(card, h) {
     bal.sel = i;
     const t = e.t;
     const sale = bal.events.find((x) => x.kind === "sell" && x.k === e.k);
-    q(".bal-detail").textContent = `${t.side === "short" ? "Shorted" : "Bought"} ${qty(t.shares)} ${t.symbol} at ${price(t.entry)} (${money(t.shares * t.entry)}) on ${t.date}; ${t.side === "short" ? "bought back" : "sold"} at ${price(t.exit)} on ${t.exitDate}, ${exitNames[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${sgn(t.netR)}R) after ${t.holdBars} day${t.holdBars === 1 ? "" : "s"}. ${bal.start ? "Balance" : "Profit"} after the sale: ${money(sale.balance)}.`;
+    q(".bal-detail").textContent = `${t.side === "short" ? "Shorted" : "Bought"} ${qty(t.shares)} ${t.symbol} at ${price(t.entry)} (${money(t.shares * t.entry)}) on ${t.date}; ${t.side === "short" ? "bought back" : "sold"} at ${price(t.exit)} on ${t.exitDate}, ${exitNames[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${sgn(t.netR)}R) after ${t.holdBars} day${t.holdBars === 1 ? "" : "s"}. ${bal.valueAt ? "Portfolio value that day" : bal.start ? "Balance after the sale" : "Profit after the sale"}: ${money(sale.balance)}.`;
     draw();
     const m = box.querySelector(`[data-i="${i}"]`);
     if (m && m.hasAttribute("tabindex")) m.focus();
   }
 
   /** trades: the trades to draw; start: the account's starting balance (0 = running profit); spy: { close(date), base } or null. */
-  function render(trades, start, { spy = null, settle = false, title = "" } = {}) {
+  function render(trades, start, { spy = null, settle = false, title = "", valueAt = null } = {}) {
     if (!trades || !trades.length) { card.hidden = true; return; }
     card.hidden = false;
+    bal.valueAt = valueAt;
     prepare(trades, start);
     bal.spy = spy; bal.label = title;
     if (settle && !bal.picked) { bal.win = defaultWindow(); bal.offset = 0; }

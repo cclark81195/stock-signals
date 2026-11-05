@@ -337,3 +337,42 @@ test("swingStats splits longs and shorts, and borrow fees add up", () => {
   assert.ok(Math.abs(c.bySide.short.borrow - trades.filter((t) => t.side === "short").reduce((s, t) => s + t.borrow, 0)) < 0.01);
   assert.ok(Math.abs(c.bySide.long.pnl + c.bySide.short.pnl - trades.reduce((s, t) => s + t.pnl, 0)) < 0.01);
 });
+
+// ---------------------------------------------------------------- parking idle cash
+import { replayPark } from "../public/swing-account.js";
+const mkTrade = (symbol, date, exitDate, pnl) => ({ symbol, date, exitDate, pnl });
+const DAYS = ["d1", "d2", "d3", "d4", "d5", "d6"];
+
+test("replayPark with no growth matches replayAccount's balance", () => {
+  const rows = [{ trades: [mkTrade("AAA", "d1", "d3", 5), mkTrade("BBB", "d2", "d5", -2), mkTrade("CCC", "d2", "d2", 1)] }];
+  const a = replayAccount(rows, 300, 100, DAYS);
+  const p = replayPark(rows, 300, 100, DAYS, DAYS.map(() => 1));
+  assert.deepEqual(p.equity.map((x) => +x.toFixed(9)), a.equity.map((x) => +x.toFixed(9)));
+  assert.equal(p.taken, a.taken); assert.equal(p.skipped, a.skipped);
+});
+
+test("replayPark: parked money grows, funds a buy, and returns with the profit", () => {
+  const g = [1, 1.1, 1, 1, 1, 1];                       // parked money +10% on day 2
+  const rows = [{ trades: [mkTrade("AAA", "d2", "d4", 10)] }];
+  const p = replayPark(rows, 1000, 100, DAYS, g);
+  assert.equal(p.park[0], 1000);
+  assert.ok(Math.abs(p.park[1] - 1000) < 1e-9, "1000*1.1 = 1100 minus the 100 bought");
+  assert.deepEqual(p.held[1], ["AAA"]); assert.deepEqual(p.held[2], ["AAA"]); assert.deepEqual(p.held[3], []);
+  assert.ok(Math.abs(p.equity[1] - 1100) < 1e-9, "total is parked plus stock at cost");
+  assert.ok(Math.abs(p.park[3] - 1110) < 1e-9, "sold: 100 + 10 back into parked money");
+  assert.ok(Math.abs(p.equity[5] - 1110) < 1e-9);
+});
+
+test("replayPark: skips a signal only when parked money cannot cover it", () => {
+  const rows = [{ trades: [mkTrade("AAA", "d1", "d4", 0), mkTrade("BBB", "d1", "d4", 0), mkTrade("CCC", "d1", "d4", 0)] }];
+  const p = replayPark(rows, 250, 100, DAYS, DAYS.map(() => 1));
+  assert.equal(p.taken, 2); assert.equal(p.skipped, 1); assert.equal(p.maxOpen, 2);
+  assert.ok(Math.abs(p.park[0] - 50) < 1e-9);
+});
+
+test("replayPark: a loss moves money out of the parked pile; stocks and parked always add to total", () => {
+  const rows = [{ trades: [mkTrade("AAA", "d1", "d3", -20), mkTrade("BBB", "d2", "d6", 30)] }];
+  const g = [1.01, 0.98, 1.02, 1, 1.03, 1];
+  const p = replayPark(rows, 500, 100, DAYS, g);
+  p.equity.forEach((e, i) => assert.ok(Math.abs(e - (p.park[i] + p.held[i].length * 100)) < 1e-9));
+});

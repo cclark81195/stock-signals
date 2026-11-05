@@ -54,6 +54,18 @@
         <input id="s-balance" type="number" min="0" step="500" value="10000" inputmode="numeric" aria-describedby="h-balance" />
         <span class="help dt-ex" id="h-balance">The money in your account, used for the comparison with the S&amp;P 500. The account can only hold (balance &divide; dollars per buy) positions at once, so when more signals appear than that, the extras are skipped. Changing it updates the comparison without re-running the test. Leave it blank or 0 for unlimited cash: every signal is taken and each stock tested gets its own slot.</span>
       </label>
+      <label>Idle cash
+        <select id="s-park" aria-describedby="h-park">
+          <option value="spy">Held in the S&amp;P 500 (SPY)</option>
+          <option value="rate">Earns a yearly rate</option>
+          <option value="cash">Sits as cash</option>
+        </select>
+        <span class="help dt-ex" id="h-park">What the money not in a trade does while it waits. <strong>Held in SPY</strong>: the account starts fully invested in SPY; each signal sells just enough SPY to fund the buy, and when the trade is sold the money goes back into SPY. The comparison then shows what trading on top of SPY added or took away. Needs a starting balance. Changing it updates the results without re-running the test.</span>
+      </label>
+      <label id="sw-parkrate-wrap" hidden>Yearly rate on idle cash (%)
+        <input id="s-parkrate" type="number" min="0" step="0.1" value="4" inputmode="decimal" aria-describedby="h-parkrate" />
+        <span class="help dt-ex" id="h-parkrate">For a money-market fund or T-bills: the yearly rate, earned a little each trading day. Use today's rate from your account.</span>
+      </label>
       <label>Dollars per buy ($)
         <input id="s-dollars" type="number" min="1" step="1" value="100" inputmode="decimal" aria-describedby="h-dollars" />
         <span class="help dt-ex" id="h-dollars">Spend this fixed amount on every buy, using fractional shares. It only changes the dollar figures; the R figures do not depend on it.</span>
@@ -242,7 +254,29 @@
           <p class="dt-ballegend"><span><i class="lg ln"></i> Account balance</span> <span><i class="lg ln sp"></i> Same money in the S&amp;P 500</span> <span><i class="lg buy"></i> Buy (or short sale)</span> <span><i class="lg sell win"></i> Sell (or cover) at a profit</span> <span><i class="lg sell loss"></i> Sell (or cover) at a loss</span> <span class="hint bal-range"></span></p>
           <p class="hint dt-baldetail bal-detail" aria-live="polite">Tap or click a marker to see that trade.</p>
         </div>
-        <p class="hint dt-ex">The balance only changes when a trade is sold, so it steps up or down at each green or red triangle; blue triangles are buys. It uses your starting balance and only the trades the account had cash for. With the balance box empty it shows the running profit from every signal instead. It draws as the scan runs and, when it finishes, opens on the widest range with a readable number of markers; use the buttons to zoom or page through time. The orange line is the same money held in SPY: from the start of the data it is the true value, and when you zoom into a later range it is rebased to your balance at the start of that range, so the two lines compare like with like.</p>
+        <p class="hint dt-ex">With idle cash left as cash, the balance only changes when a trade is sold, so it steps up or down at each green or red triangle; with idle cash held in SPY or earning a rate it moves every day. Blue triangles are buys. It uses your starting balance and only the trades the account had cash for. With the balance box empty it shows the running profit from every signal instead. It draws as the scan runs and, when it finishes, opens on the widest range with a readable number of markers; use the buttons to zoom or page through time. The orange line is the same money held in SPY: from the start of the data it is the true value, and when you zoom into a later range it is rebased to your balance at the start of that range, so the two lines compare like with like.</p>
+
+        <div class="dt-chart-card dt-balcard dt-mixcard" id="sw-mixcard" hidden>
+          <div class="dt-chart-title"><span class="mx-title">What the portfolio holds</span> <span class="hint">(stacked, with the balance on top)</span></div>
+          <div class="dt-balbar" role="group" aria-label="Holdings chart view">
+            <button type="button" class="dt-mini mx-view" data-view="all">Everything</button>
+            <button type="button" class="dt-mini mx-view" data-view="stocks">Stocks only (zoomed in)</button>
+          </div>
+          <div class="dt-balbar" role="group" aria-label="Holdings chart range">
+            <button type="button" class="dt-mini mx-win" data-win="21">1 month</button>
+            <button type="button" class="dt-mini mx-win" data-win="63">3 months</button>
+            <button type="button" class="dt-mini mx-win" data-win="252">1 year</button>
+            <button type="button" class="dt-mini mx-win" data-win="all">All</button>
+            <span class="dt-balspacer"></span>
+            <button type="button" class="dt-mini mx-prev" aria-label="Earlier days">&larr; Earlier</button>
+            <button type="button" class="dt-mini mx-next" aria-label="Later days">Later &rarr;</button>
+          </div>
+          <div class="mx-svg"></div>
+          <p class="dt-ballegend mx-legend"></p>
+          <p class="hint mx-range"></p>
+          <p class="hint dt-baldetail mx-detail" aria-live="polite">Tap or click a bar to see what the portfolio held then.</p>
+        </div>
+        <p class="hint dt-ex">Each bar is one day (long ranges average a few days per bar). The bottom block is the idle money you chose above; the coloured blocks on top are the stocks held that day, the five held most often in their own colour and the rest grouped. When a signal fires you will see the bottom block shrink and a stock block appear; when the trade is sold the money flows back. Because most of the money usually sits in the idle block, "Stocks only" zooms the scale in to just the stocks so you can see positions open and close. In the full view, the line along the top is the portfolio balance and the orange line is the same starting money left in SPY. Stocks are counted at what was paid for them until they are sold. Needs a starting balance.</p>
 
         <h3>By sector</h3>
         <div class="table-wrap">
