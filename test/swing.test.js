@@ -412,3 +412,35 @@ test("maxDrawdown finds the deepest fall from a peak", () => {
   assert.equal(maxDrawdown([100, 101, 102]).dd, 0);
   const n = maxDrawdown([100, 150, 60]); assert.equal(n.from, 1); assert.equal(n.to, 2); assert.ok(Math.abs(n.dd + 0.6) < 1e-12);
 });
+
+test("replayPark with a mark: unrealised gains and losses show in the daily value, and the sale still settles at the trade's result", () => {
+  const rows = [{ trades: [{ symbol: "AAA", date: "d2", exitDate: "d5", pnl: 10, shares: 1, entry: 100, exit: 110 }] }];
+  const path = { d2: 1, d3: 0.9, d4: 1.2, d5: 1.1 };               // dips 10%, then runs up 20%
+  const mark = (t, d) => path[d];
+  const p = replayPark(rows, 1000, 100, DAYS, DAYS.map(() => 1), { mark });
+  assert.ok(Math.abs(p.equity[2] - 990) < 1e-9, "d3: parked 900 + stock worth 90");
+  assert.ok(Math.abs(p.equity[3] - 1020) < 1e-9, "d4: parked 900 + stock worth 120");
+  assert.deepEqual(p.held[2].map((h) => [h[0], +h[1].toFixed(6)]), [["AAA", 90]]);
+  assert.ok(Math.abs(p.equity[4] - 1010) < 1e-9, "d5: sold for 100 + 10");
+  assert.ok(maxDrawdown([1000, ...p.equity]).dd < -0.009, "the dip is visible as a drawdown");
+  const flat = replayPark(rows, 1000, 100, DAYS, DAYS.map(() => 1));
+  assert.ok(Math.abs(flat.equity[2] - 1000) < 1e-9, "without a mark the stock is valued at cost");
+});
+
+test("replayPark: percent sizing uses the market value of what is held", () => {
+  const rows = [{ trades: [
+    { symbol: "AAA", date: "d1", exitDate: "d6", pnl: 0, shares: 1, entry: 100, exit: 100 },
+    { symbol: "BBB", date: "d3", exitDate: "d6", pnl: 0, shares: 1, entry: 100, exit: 100 },
+  ] }];
+  const mark = (t, d) => (t.symbol === "AAA" ? 2 : 1);               // AAA doubles
+  const p = replayPark(rows, 1000, 100, DAYS, DAYS.map(() => 1), { pct: 10, mark, base: 100 });
+  assert.equal(p.takenList[0].size, 100);                           // 10% of 1,000
+  assert.ok(Math.abs(p.takenList[1].size - 110) < 1e-9, "10% of (900 parked + 200 worth of AAA) = 110");
+});
+
+import { isoDate } from "../lib/constituents.js";
+test("constituents: join dates are kept only when they are real ISO dates", () => {
+  assert.equal(isoDate("2025-11-28"), "2025-11-28");
+  assert.equal(isoDate("1957-03-04 (as part of the S&P 500)"), "1957-03-04");
+  assert.equal(isoDate(""), ""); assert.equal(isoDate("Nov 2025"), ""); assert.equal(isoDate(undefined), "");
+});

@@ -134,6 +134,13 @@
           </select>
           <span class="help dt-ex" id="h-moskip">The most recent month is left out of the ranking because last month's big winners tend to give some back. One month is the standard ("12-1" momentum).</span>
         </label>
+        <label class="check"><input id="s-mojoin" type="checkbox" checked aria-describedby="h-mojoin" /> Only rank a stock after it joined the S&amp;P 500
+          <span class="help dt-ex" id="h-mojoin">The stock list is today's S&amp;P 500, and many of its members were added because they had already rallied (for example SanDisk joined in late 2025). Letting the test buy them years earlier is hindsight and inflates results. With this on, a stock can only be ranked from the day it joined. Stocks that left the index are still missing, so some survivorship bias remains. Needs the join dates from the S&amp;P 500 list; stocks without one are always allowed.</span>
+        </label>
+        <label>Most holdings from one sector
+          <input id="s-mosec" type="number" min="0" max="100" step="1" value="0" inputmode="numeric" aria-describedby="h-mosec" />
+          <span class="help dt-ex" id="h-mosec">Spreads the bets: when a sector already has this many holdings, the next best stock from another sector is taken instead. 0 means no limit. Momentum tends to pile into whatever sector is hot, so a limit like 3 shows how much of the result was one theme.</span>
+        </label>
         <label>Keep a holding until it falls below rank
           <input id="s-mobuf" type="number" min="0" max="50" step="1" value="0" inputmode="numeric" aria-describedby="h-mobuf" />
           <span class="help dt-ex" id="h-mobuf">Extra places a holding may slip before it is sold. 0 swaps a stock the moment it is outside the top group; 5 keeps it until it is outside the top group plus five places. Higher means fewer trades and less cost.</span>
@@ -246,6 +253,24 @@
             </table>
           </div>
           <p class="hint dt-ex">What the strategy would own if it rebalanced on the latest close: the top-ranked stocks. A research list, not advice, and the ranking changes every month.</p>
+
+          <h4>Does it survive nearby settings?</h4>
+          <p class="hint">A result that only works for one exact setting is probably luck. This re-runs the ranking on the prices already loaded with the settings around yours (look-back, number of stocks, how often it checks) and shows each one against the S&amp;P 500. It uses your starting balance, idle-cash setting and the options above.</p>
+          <div class="dt-sp-actions"><button type="button" id="sw-rob-run" class="dt-mini">Check nearby settings</button> <span class="hint" id="sw-rob-note" role="status"></span></div>
+          <div class="table-wrap" id="sw-rob-wrap" hidden>
+            <table class="stocks dt-table">
+              <thead><tr>
+                <th class="num" title="How far back the ranking looks, in months (momentum only)">Look-back</th>
+                <th class="num">Stocks</th><th>Checks</th>
+                <th class="num" title="Compound growth per year">Growth / yr</th>
+                <th class="num" title="Portfolio growth per year minus the S&amp;P 500's, in percentage points">Edge</th>
+                <th class="num" title="Largest fall from a high, valued daily">Worst drop</th>
+                <th class="num" title="Calendar years the portfolio beat SPY">Years ahead</th>
+                <th class="num">Trades</th>
+              </tr></thead>
+              <tbody id="sw-rob"></tbody>
+            </table>
+          </div>
         </div>
 
         <div id="sw-vs" hidden>

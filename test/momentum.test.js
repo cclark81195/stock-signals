@@ -148,3 +148,31 @@ test("positive-momentum rule: a stock with a negative score is never bought", ()
   assert.equal(rot.trades.length, 0);
   assert.equal(rot.picks.length, 0);
 });
+
+test("join dates: a stock is not ranked before it joined the index", () => {
+  const winner = grow(0.003), steady = grow(0.001);
+  const all = buildRotation(dates, new Map([["WIN", winner], ["STEADY", steady]]), grow(0.001), { ...opts, topN: 1 });
+  const joinedLate = dates[600];
+  const pit = buildRotation(dates, new Map([["WIN", winner], ["STEADY", steady]]), grow(0.001), { ...opts, topN: 1, joined: new Map([["WIN", joinedLate]]) });
+  assert.equal(all.trades[0].symbol, "WIN");
+  const early = pit.trades.filter((t) => t.symbol === "WIN" && t.date < joinedLate);
+  assert.equal(early.length, 0, "no WIN trade before it joined");
+  assert.ok(pit.trades.some((t) => t.symbol === "STEADY" && t.date < joinedLate), "the other stock was held while WIN was not a member");
+  assert.ok(pit.trades.some((t) => t.symbol === "WIN" && t.date >= joinedLate), "WIN is eligible after joining");
+});
+
+test("sector cap: at most N holdings from one sector, the next best from another is taken", () => {
+  const closes = new Map([["T1", grow(0.004)], ["T2", grow(0.0035)], ["T3", grow(0.003)], ["H1", grow(0.002)], ["F1", grow(0.0015)]]);
+  const sectors = new Map([["T1", "Tech"], ["T2", "Tech"], ["T3", "Tech"], ["H1", "Health"], ["F1", "Fin"]]);
+  const free = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 3 });
+  const capped = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 3, sectors, sectorCap: 1 });
+  assert.deepEqual([...new Set(free.trades.map((t) => t.symbol))].sort(), ["T1", "T2", "T3"]);
+  assert.deepEqual([...new Set(capped.trades.map((t) => t.symbol))].sort(), ["F1", "H1", "T1"]);
+});
+
+test("current picks respect the sector cap too", () => {
+  const closes = new Map([["T1", grow(0.004)], ["T2", grow(0.0035)], ["H1", grow(0.002)]]);
+  const sectors = new Map([["T1", "Tech"], ["T2", "Tech"], ["H1", "Health"]]);
+  const rot = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 2, sectors, sectorCap: 1 });
+  assert.deepEqual(rot.picks.map((p) => p.symbol), ["T1", "H1"]);
+});

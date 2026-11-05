@@ -55,25 +55,29 @@ export function replayPark(rows, balance, dollars, dayList, growth, opts = {}) {
     byDay.get(t.date).push({ k: tieKey(t.symbol + t.date), exitDate: t.exitDate, t });
   }
   for (const list of byDay.values()) list.sort((x, y) => x.k - y.k);
-  let park = balance, taken = 0, skipped = 0, maxOpen = 0, open = [], cost = 0;
+  let park = balance, taken = 0, skipped = 0, maxOpen = 0, open = [];
   const takenList = [], equity = [], parked = [], held = [];
   const scaled = (c, size) => { const f = size / (c.t.base || opts.base || dollars); return { ...c.t, shares: c.t.shares * f, pnl: c.t.pnl * f, size }; };
+  // opts.mark(trade, date) -> what one dollar paid for the trade is worth on `date` (price now / price paid). Without it,
+  // stocks are valued at what was paid until they are sold.
   dayList.forEach((d, i) => {
     park *= growth[i];
     const still = [];
-    for (const p of open) { if (p.exitDate <= d) { park += p.size + p.pnl; cost -= p.size; } else still.push(p); }
+    for (const p of open) { if (p.exitDate <= d) park += p.size + p.pnl; else still.push(p); }
     open = still;
+    const worth = (p) => p.size * (opts.mark ? opts.mark(p.t, d) : 1);
     for (const c of byDay.get(d) || []) {
-      const size = pct ? pct * (park + cost) : dollars;
+      const size = pct ? pct * (park + open.reduce((t, p) => t + worth(p), 0)) : dollars;
       if (!(size > 0) || park < size - 1e-9) { skipped++; continue; }
       const t = scaled(c, size);
       park -= size; taken++; takenList.push(t);
-      if (c.exitDate <= d) park += size + t.pnl; else { open.push({ exitDate: c.exitDate, size, pnl: t.pnl, symbol: c.t.symbol }); cost += size; }
+      if (c.exitDate <= d) park += size + t.pnl; else open.push({ exitDate: c.exitDate, size, pnl: t.pnl, symbol: c.t.symbol, t: c.t });
     }
     maxOpen = Math.max(maxOpen, open.length);
-    equity.push(park + cost);
+    const values = open.map(worth);
+    equity.push(park + values.reduce((a, b) => a + b, 0));
     parked.push(park);
-    held.push(open.map((p) => [p.symbol, p.size]));
+    held.push(open.map((p, k) => [p.symbol, values[k]]));
   });
   return { equity, park: parked, held, taken, skipped, maxOpen, takenList };
 }

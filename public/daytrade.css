@@ -216,3 +216,5 @@ body.dt-explain .dt-ex { display: block; }
 .dt-ballegend .sw { display: inline-block; width: 11px; height: 11px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; }
 
 #sw-results.rotation .r-only { display: none !important; }
+
+#sw-rob tr.dt-cur td { font-weight: 600; background: var(--grid); }
