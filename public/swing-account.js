@@ -67,7 +67,7 @@ export function replayPark(rows, balance, dollars, dayList, growth, opts = {}) {
     open = still;
     const worth = (p) => p.size * (opts.mark ? opts.mark(p.t, d) : 1);
     for (const c of byDay.get(d) || []) {
-      const size = pct ? pct * (park + open.reduce((t, p) => t + worth(p), 0)) : dollars;
+      const size = (pct ? pct * (park + open.reduce((t, p) => t + worth(p), 0)) : dollars) * (c.t.w == null ? 1 : c.t.w);   // t.w: optional size multiplier
       if (!(size > 0) || park < size - 1e-9) { skipped++; continue; }
       const t = scaled(c, size);
       park -= size; taken++; takenList.push(t);

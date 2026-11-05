@@ -16,8 +16,8 @@ const STRATEGY_NAMES = { meanrev: "Buy sharp dips", breakout: "Buy new highs" };
 const EXIT_NAMES = { signal: "Exit signal", stop: "Stop", "stop-gap": "Gap through stop", time: "Time limit", "data-end": "Still open at the end", dropped: "Fell off the leaderboard", target: "Back at its average", trend: "Market filter (SPY below its 200-day)" };
 
 const STORE_KEY = "swing-lab-settings";
-const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", sizeMode: "s-sizemode", sizePct: "s-sizepct", moScore: "s-moscore", moSec: "s-mosec", moEvery: "s-moevery", moBuf: "s-mobuf", moLook: "s-molook", moSkip: "s-moskip", moN: "s-mon", park: "s-park", parkRate: "s-parkrate", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", borrow: "s-borrow", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
-const CHECKS = { trend: "s-trend", mkt: "s-mkt", bbShort: "s-bbshort", moJoin: "s-mojoin" };
+const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", sizeMode: "s-sizemode", sizePct: "s-sizepct", moScore: "s-moscore", moSec: "s-mosec", moEvery: "s-moevery", moBuf: "s-mobuf", moStop: "s-mostop", moLook: "s-molook", moSkip: "s-moskip", moN: "s-mon", park: "s-park", parkRate: "s-parkrate", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", borrow: "s-borrow", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
+const CHECKS = { trend: "s-trend", mkt: "s-mkt", bbShort: "s-bbshort", moJoin: "s-mojoin", moVol: "s-movol" };
 const SW_BATCH = 25, SW_PARALLEL = 2;
 
 const sw = { stocks: [], rows: new Map(), dailyPnl: {}, bench: null, benchErr: false, failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, baseDollars: 100, isRot: false, rot: { dates: null, spy: null, closes: new Map() } };
@@ -32,6 +32,7 @@ const rotOpts = () => ({
   buffer: Math.min(50, Math.max(0, Math.round(Number($("s-mobuf").value) || 0))),
   lookback: (Number($("s-molook").value) || 12) * 21, skip: (Number($("s-moskip").value) || 0) * 21,
   topN: Math.min(100, Math.max(3, Math.round(Number($("s-mon").value) || 20))), slipBps: Math.max(0, Number($("s-slip").value) || 0), spyFilter: $("s-mkt").checked,
+  trailStop: Math.min(90, Math.max(0, Number($("s-mostop").value) || 0)), volSize: $("s-movol").checked,
 });
 /** How big each buy is: a share of the portfolio, or fixed dollars. dollars is the size for the fixed case. */
 function sizing(topN) {
@@ -457,6 +458,8 @@ function renderRotTiles(rot, rows, o, takenList) {
     tile("Average hold", avgHold == null ? "-" : `${avgHold.toFixed(0)} days`, "", "", "How long a position was kept on average (trading days)."),
   ];
   tiles.push(tile("Index join dates", o.joined ? "Applied" : "Off", o.joined ? "ranked only after joining" : "hindsight in the stock list", o.joined ? "pos" : "neg", "With this on, a stock can only be ranked from the day it joined the S&P 500, which removes the advantage of knowing which stocks would later be added. Turn it off to see how much that hindsight was worth."));
+  if (o.trailStop > 0) { const k = rot.trades.filter((t) => t.exitReason === "stop").length; tiles.push(tile("Stopped out", String(k), n ? `${pct0(k / n)} of positions` : "", "", `Positions sold because the close fell ${o.trailStop}% below the highest close since the buy. Each sale fills at the next close.`)); }
+  if (o.volSize) { const ws = rot.trades.map((t) => t.w).filter((w) => w != null); const avg = ws.length ? ws.reduce((a, b) => a + b, 0) / ws.length : null; tiles.push(tile("Average size", avg == null ? "-" : `${avg.toFixed(2)}x`, "vs equal weight", "", "Average of each position's size relative to the normal equal share. Below 1x means the picks were wilder than the typical stock.")); }
   if (o.spyFilter) tiles.push(tile("Market filter", rot.filterOff ? "Out of stocks" : "In stocks", "SPY vs its 200-day average", rot.filterOff ? "neg" : "pos", "With the filter on, everything is sold while SPY is below its 200-day average and the money sits in your idle-cash setting."));
   $("sw-rot-tiles").innerHTML = tiles.join("");
 }
@@ -554,7 +557,7 @@ function settingsNote(s) {
   if (s.strategy === "momentum") {
     const o = rotOpts();
     const rank = o.score === "dip" ? "how far each stock is below its 20-day average (at least 1 deviation)" : `the ${s.moLook}-month gain${Number(s.moSkip) ? ` leaving out the latest ${s.moSkip} month${s.moSkip === "1" ? "" : "s"}` : ""}`;
-    return `Settings used: leaderboard ranked by ${rank}; hold the top ${o.topN} equally (${+(100 / o.topN).toFixed(2)}% each), checked ${{ month: "monthly", week: "weekly", day: "daily" }[o.every]}${o.buffer ? `, kept until they fall ${o.buffer} places below the group` : ""}${o.spyFilter ? "; all sold when SPY is below its 200-day average" : ""}${o.joined ? "; stocks ranked only after they joined the S&P 500" : "; ranks today's members for the whole period (hindsight)"}${o.sectorCap ? `; at most ${o.sectorCap} per sector` : ""}; ${s.slipBps} bps slippage; ${s.years} years.`;
+    return `Settings used: leaderboard ranked by ${rank}; hold the top ${o.topN} equally (${+(100 / o.topN).toFixed(2)}% each), checked ${{ month: "monthly", week: "weekly", day: "daily" }[o.every]}${o.buffer ? `, kept until they fall ${o.buffer} places below the group` : ""}${o.spyFilter ? "; all sold when SPY is below its 200-day average" : ""}${o.joined ? "; stocks ranked only after they joined the S&P 500" : "; ranks today's members for the whole period (hindsight)"}${o.sectorCap ? `; at most ${o.sectorCap} per sector` : ""}${o.trailStop ? `; ${o.trailStop}% trailing stop (21-day lockout)` : ""}${o.volSize ? "; positions scaled by volatility" : ""}; ${s.slipBps} bps slippage; ${s.years} years.`;
   }
   const strat = s.strategy === "meanrev"
     ? `buy dips (2-day RSI under ${s.rsiBuy}, sell above the ${s.exitSma}-day average, ${Number(s.hold) > 0 ? `${s.hold}-day limit` : "no time limit"})`
@@ -679,7 +682,7 @@ $("s-sizemode").addEventListener("change", () => { showSizing(); rerender(); });
 for (const id of ["s-sizepct", "s-dollars"]) $(id).addEventListener("change", rerender);
 // the rotation ranks from prices already in memory, so its settings update the results without re-downloading
 $("s-moscore").addEventListener("change", () => { showStrategy(); if (sw.isRot) rerender(); });
-for (const id of ["s-mojoin", "s-mosec", "s-moevery", "s-mon", "s-molook", "s-moskip", "s-mobuf", "s-mkt", "s-slip"]) $(id).addEventListener("change", () => { if (sw.isRot) rerender(); });
+for (const id of ["s-mojoin", "s-mosec", "s-moevery", "s-mon", "s-molook", "s-moskip", "s-mobuf", "s-mostop", "s-movol", "s-mkt", "s-slip"]) $(id).addEventListener("change", () => { if (sw.isRot) rerender(); });
 $("s-parkrate").addEventListener("change", rerender);
 $("sw-form").addEventListener("submit", (e) => { e.preventDefault(); run(); });
 $("sw-run").addEventListener("click", () => run());
