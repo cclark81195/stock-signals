@@ -69,12 +69,19 @@ export default async function handler(req, res) {
         for (const b of bars) { const i = at.get(b.date); if (i != null) arr[i] = r6(b.c); }
         let last = null;
         for (let i = 0; i < arr.length; i++) { if (arr[i] == null) arr[i] = last; else last = arr[i]; }
-        return arr;
+        // average dollars traded per day over the latest 60 days (in millions), known at each day's close: lets the page rank
+        // only the stocks that were heavily traded at the time. Days a stock did not trade count as zero.
+        const dv = new Array(dates.length).fill(0);
+        for (const b of bars) { const i = at.get(b.date); if (i != null) dv[i] = (b.c * (b.v || 0)) / 1e6; }
+        const avg = new Array(dates.length).fill(null);
+        let sum = 0;
+        for (let i = 0; i < dv.length; i++) { sum += dv[i]; if (i >= 60) sum -= dv[i - 60]; if (i >= 59) avg[i] = Number(sum / 60 < 0 ? 0 : (sum / 60).toPrecision(3)); }
+        return { arr, avg };
       });
-      const closes = {}, errors = {};
-      results.forEach((r, i) => { if (r.ok) closes[symbols[i]] = r.value; else errors[symbols[i]] = String(r.error?.message || r.error); });
+      const closes = {}, dvol = {}, errors = {};
+      results.forEach((r, i) => { if (r.ok) { closes[symbols[i]] = r.value.arr; dvol[symbols[i]] = r.value.avg; } else errors[symbols[i]] = String(r.error?.message || r.error); });
       res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
-      res.status(200).json({ years, dates, spy: spyBars.map((b) => r6(b.c)), closes, errors });
+      res.status(200).json({ years, dates, spy: spyBars.map((b) => r6(b.c)), closes, dvol, errors });
     } catch (e) {
       res.setHeader("Cache-Control", "no-store");
       res.status(502).json({ error: String(e?.message || e) });

@@ -2,23 +2,29 @@
 // Everything the Day Trade Lab's symbol picker offers: SPY, the five biggest non-stablecoin
 // cryptocurrencies, and every S&P 500 stock (from the same live list the scanner uses).
 // Cached at Vercel's edge for a day when the S&P 500 list loaded, 5 minutes when it didn't.
-import { getConstituents } from "../lib/constituents.js";
+import { getConstituents, getMembership } from "../lib/constituents.js";
 import { CRYPTO, ETFS } from "../lib/daytrade/markets.js";
 import { ETF_UNIVERSE } from "../lib/etf-universe.js";
 import { getRussell, RUSSELL_KEYS } from "../lib/russell.js";
 
 // ?list=sp400|sp600|nasdaq100|russell1000|russell3000|etfs : just that stock list for the Swing Lab (no SPY or crypto rows). Same shape: { options, loaded, stockCount }.
 async function otherList(list, res) {
-  let members = null;
-  try { members = list === "etfs" ? ETF_UNIVERSE : RUSSELL_KEYS.includes(list) ? (await getRussell(list)).members : (await getConstituents(list)).members; } catch { /* reported as not loaded */ }
-  const options = (members || []).map((m) => ({ symbol: m.symbol, name: m.company || m.symbol, tag: m.sector || "Other" }));
+  let members = null, former = [];
+  try {
+    if (list === "etfs") members = ETF_UNIVERSE;
+    else if (RUSSELL_KEYS.includes(list)) members = (await getRussell(list)).members;
+    else if (list === "nasdaq100") members = (await getConstituents(list)).members;
+    else { const m = await getMembership(list); members = m.members; former = m.former; }   // S&P lists: also stocks that left the index
+  } catch { /* reported as not loaded */ }
+  const row = (m) => ({ symbol: m.symbol, name: m.company || m.symbol, tag: m.sector || "Other", ...(m.added ? { added: m.added } : {}), ...(m.removed ? { removed: m.removed } : {}), ...(m.former ? { former: true } : {}) });
+  const options = [...(members || []), ...former].map(row);
   res.setHeader("Cache-Control", members ? "public, s-maxage=86400, stale-while-revalidate=86400" : "public, s-maxage=300");
-  res.status(200).json({ options, loaded: !!members, stockCount: options.length });
+  res.status(200).json({ options, loaded: !!members, stockCount: (members || []).length, formerCount: former.length });
 }
 
 export default async function handler(req, res) {
   const list = String((req.query || {}).list || "");
-  if (["sp400", "sp600", "nasdaq100", "russell1000", "russell3000", "etfs"].includes(list)) return otherList(list, res);
+  if (["sp500", "sp400", "sp600", "nasdaq100", "russell1000", "russell3000", "etfs"].includes(list)) return otherList(list, res);
   const options = [
     ...ETFS.map((e) => ({ ...e, tag: "ETF" })),
     ...CRYPTO.map((c) => ({ ...c, tag: "Crypto" })),
