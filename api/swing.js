@@ -1,5 +1,6 @@
 // GET /api/swing?symbols=AAPL,MSFT&strategy=meanrev|breakout&years=10&dollars=100&slipBps=5&stopAtr=3&trend=1&mkt=0
 //   &rsiBuy=10&exitSma=5&hold=10 (mean reversion)  &entryLen=55&exitLen=20 (breakout)  strategy=bollinger&bbLen=20&bbK=2&bbEntry=below|reclaim&bbExit=mid|half|upper&hold=10&bbShort=1&borrow=1
+//   ?mode=prices&symbols=...&years=10 : daily closes lined up on SPY's calendar, for the page's momentum rotation (it ranks stocks against each other)
 // Swing Lab: backtests daily-bar, multi-day strategies over up to 10 years. Research only; places no orders.
 // Returns compact, ADDABLE per-symbol totals (like the Day Trade Lab scan) so the page can merge many stocks.
 import { fetchChart, mapLimit } from "../lib/yahoo.js";
@@ -47,6 +48,33 @@ export default async function handler(req, res) {
       const spy = toDaily(await fetchChart("SPY", `${years}y`, "1d"));
       res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
       res.status(200).json({ bench: spy.map((b) => [b.date, Math.round(b.c * 10000) / 10000]) });
+    } catch (e) {
+      res.setHeader("Cache-Control", "no-store");
+      res.status(502).json({ error: String(e?.message || e) });
+    }
+    return;
+  }
+  // ?mode=prices : closes for each symbol on SPY's calendar (the last close carried over days a stock did not trade),
+  // so the page can rank many stocks against each other. Rounded to 6 significant digits to keep the response small.
+  if (q.mode === "prices") {
+    try {
+      const spyBars = toDaily(await fetchChart("SPY", `${years}y`, "1d"));
+      const dates = spyBars.map((b) => b.date);
+      const at = new Map(dates.map((d, i) => [d, i]));
+      const r6 = (x) => Number(Number(x).toPrecision(6));
+      const results = await mapLimit(symbols, 5, async (symbol) => {
+        const bars = toDaily(await fetchChart(symbol, `${years}y`, "1d"));
+        if (bars.length < 260) throw new Error("Not enough price history");
+        const arr = new Array(dates.length).fill(null);
+        for (const b of bars) { const i = at.get(b.date); if (i != null) arr[i] = r6(b.c); }
+        let last = null;
+        for (let i = 0; i < arr.length; i++) { if (arr[i] == null) arr[i] = last; else last = arr[i]; }
+        return arr;
+      });
+      const closes = {}, errors = {};
+      results.forEach((r, i) => { if (r.ok) closes[symbols[i]] = r.value; else errors[symbols[i]] = String(r.error?.message || r.error); });
+      res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
+      res.status(200).json({ years, dates, spy: spyBars.map((b) => r6(b.c)), closes, errors });
     } catch (e) {
       res.setHeader("Cache-Control", "no-store");
       res.status(502).json({ error: String(e?.message || e) });

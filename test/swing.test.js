@@ -339,7 +339,7 @@ test("swingStats splits longs and shorts, and borrow fees add up", () => {
 });
 
 // ---------------------------------------------------------------- parking idle cash
-import { replayPark } from "../public/swing-account.js";
+import { replayPark, maxDrawdown } from "../public/swing-account.js";
 const mkTrade = (symbol, date, exitDate, pnl) => ({ symbol, date, exitDate, pnl });
 const DAYS = ["d1", "d2", "d3", "d4", "d5", "d6"];
 
@@ -357,7 +357,7 @@ test("replayPark: parked money grows, funds a buy, and returns with the profit",
   const p = replayPark(rows, 1000, 100, DAYS, g);
   assert.equal(p.park[0], 1000);
   assert.ok(Math.abs(p.park[1] - 1000) < 1e-9, "1000*1.1 = 1100 minus the 100 bought");
-  assert.deepEqual(p.held[1], ["AAA"]); assert.deepEqual(p.held[2], ["AAA"]); assert.deepEqual(p.held[3], []);
+  assert.deepEqual(p.held[1], [["AAA", 100]]); assert.deepEqual(p.held[2], [["AAA", 100]]); assert.deepEqual(p.held[3], []);
   assert.ok(Math.abs(p.equity[1] - 1100) < 1e-9, "total is parked plus stock at cost");
   assert.ok(Math.abs(p.park[3] - 1110) < 1e-9, "sold: 100 + 10 back into parked money");
   assert.ok(Math.abs(p.equity[5] - 1110) < 1e-9);
@@ -374,5 +374,41 @@ test("replayPark: a loss moves money out of the parked pile; stocks and parked a
   const rows = [{ trades: [mkTrade("AAA", "d1", "d3", -20), mkTrade("BBB", "d2", "d6", 30)] }];
   const g = [1.01, 0.98, 1.02, 1, 1.03, 1];
   const p = replayPark(rows, 500, 100, DAYS, g);
-  p.equity.forEach((e, i) => assert.ok(Math.abs(e - (p.park[i] + p.held[i].length * 100)) < 1e-9));
+  p.equity.forEach((e, i) => assert.ok(Math.abs(e - (p.park[i] + p.held[i].reduce((s, h) => s + h[1], 0))) < 1e-9));
+});
+
+test("replayPark: percent sizing takes that share of the portfolio and scales profit", () => {
+  // trade profit is stated for $100; a 10% position of a $2,000 portfolio is $200, so the profit doubles
+  const rows = [{ trades: [{ symbol: "AAA", date: "d2", exitDate: "d4", pnl: 5, shares: 2, entry: 50, exit: 52.5, netR: 1 }] }];
+  const p = replayPark(rows, 2000, 100, DAYS, DAYS.map(() => 1), { pct: 10, base: 100 });
+  assert.deepEqual(p.held[1], [["AAA", 200]]);
+  assert.equal(p.takenList[0].size, 200); assert.equal(p.takenList[0].pnl, 10); assert.equal(p.takenList[0].shares, 4);
+  assert.ok(Math.abs(p.equity[5] - 2010) < 1e-9);
+  assert.equal(rows[0].trades[0].pnl, 5, "the original trade is left alone");
+});
+
+test("replayPark: percent sizing compounds with the portfolio and scales losses too", () => {
+  const rows = [{ trades: [
+    { symbol: "AAA", date: "d1", exitDate: "d2", pnl: 10, shares: 1, entry: 100, exit: 110 },   // +10% on $100
+    { symbol: "BBB", date: "d3", exitDate: "d4", pnl: -10, shares: 1, entry: 100, exit: 90 },
+  ] }];
+  const p = replayPark(rows, 1000, 100, DAYS, DAYS.map(() => 1), { pct: 50, base: 100 });
+  assert.equal(p.takenList[0].size, 500);               // 50% of 1,000
+  assert.equal(p.takenList[0].pnl, 50);                 // +10% of 500
+  assert.equal(p.takenList[1].size, 525);               // 50% of the 1,050 now
+  assert.ok(Math.abs(p.takenList[1].pnl + 52.5) < 1e-9);
+  assert.ok(Math.abs(p.equity[5] - 997.5) < 1e-9);
+});
+
+test("replayPark: fixed size with a different base scales profit (changing dollars after a run)", () => {
+  const rows = [{ trades: [{ symbol: "AAA", date: "d1", exitDate: "d2", pnl: 4, shares: 1, entry: 100, exit: 104 }] }];
+  const p = replayPark(rows, 1000, 300, DAYS, DAYS.map(() => 1), { base: 100 });   // run with $100, now $300 per buy
+  assert.equal(p.takenList[0].pnl, 12);
+});
+
+test("maxDrawdown finds the deepest fall from a peak", () => {
+  const m = maxDrawdown([100, 120, 90, 110, 130, 104, 125]);
+  assert.ok(Math.abs(m.dd - (90 / 120 - 1)) < 1e-12 || Math.abs(m.dd - (104 / 130 - 1)) < 1e-12);
+  assert.equal(maxDrawdown([100, 101, 102]).dd, 0);
+  const n = maxDrawdown([100, 150, 60]); assert.equal(n.from, 1); assert.equal(n.to, 2); assert.ok(Math.abs(n.dd + 0.6) < 1e-12);
 });

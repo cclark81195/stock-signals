@@ -13,7 +13,7 @@ export function makeMixChart(card, h) {
   // Which stocks get their own colour: the ones held for the most dollar-days. Everything else is "Other stocks".
   function layersFor(d) {
     const tally = new Map();
-    for (const list of d.held) for (const s of list) tally.set(s, (tally.get(s) || 0) + 1);
+    for (const list of d.held) for (const [s] of list) tally.set(s, (tally.get(s) || 0) + 1);
     const top = [...tally.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, TOP_STOCKS).map(([s]) => s);
     const layers = [{ key: "@park", name: d.parkName, cls: "mx-park" }, ...top.map((s, i) => ({ key: s, name: s, cls: `mx-s${i}` }))];
     if (tally.size > top.length) layers.push({ key: "@other", name: "Other stocks", cls: "mx-other" });
@@ -39,7 +39,7 @@ export function makeMixChart(card, h) {
       let total = 0, spy = 0, park = 0;
       for (let i = a; i < b; i++) {
         park += d.park[i]; total += d.equity[i]; spy += d.spyOnly[i];
-        for (const s of d.held[i]) vals.set(top.has(s) ? s : "@other", (vals.get(top.has(s) ? s : "@other") || 0) + d.dollars);
+        for (const [sym, amt] of d.held[i]) { const k = top.has(sym) ? sym : "@other"; vals.set(k, (vals.get(k) || 0) + amt); }
       }
       vals.set("@park", park);
       for (const [k, v] of vals) vals.set(k, v / n);
@@ -104,7 +104,7 @@ export function makeMixChart(card, h) {
     st.sel = i;
     const when = b.n > 1 ? `${d.dates[b.a]} to ${d.dates[b.b]} (average)` : d.dates[b.a];
     const parts = st.layers.map((l) => [l.name, b.vals.get(l.key) || 0]).filter(([, v]) => v > 0.005).map(([n, v]) => `${n} ${money(v)}`);
-    const heldNow = b.held.length ? `Stocks held on ${d.dates[b.last]}: ${b.held.slice(0, 40).join(", ")}${b.held.length > 40 ? `, and ${b.held.length - 40} more` : ""}.` : `No stocks held on ${d.dates[b.last]}.`;
+    const heldNow = b.held.length ? `Stocks held on ${d.dates[b.last]}: ${b.held.slice(0, 40).map((h) => h[0]).join(", ")}${b.held.length > 40 ? `, and ${b.held.length - 40} more` : ""}.` : `No stocks held on ${d.dates[b.last]}.`;
     q(".mx-detail").textContent = `${when}: portfolio ${money(b.total)} (the same money in the S&P 500 alone: ${money(b.spy)}). Made of ${parts.join(", ")}. ${heldNow}`;
     draw();
     const el = box.querySelector(`[data-i="${i}"]`);

@@ -127,7 +127,7 @@ export function makeTradeChart(card, h) {
     bal.sel = i;
     const t = e.t;
     const sale = bal.events.find((x) => x.kind === "sell" && x.k === e.k);
-    q(".bal-detail").textContent = `${t.side === "short" ? "Shorted" : "Bought"} ${qty(t.shares)} ${t.symbol} at ${price(t.entry)} (${money(t.shares * t.entry)}) on ${t.date}; ${t.side === "short" ? "bought back" : "sold"} at ${price(t.exit)} on ${t.exitDate}, ${exitNames[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${sgn(t.netR)}R) after ${t.holdBars} day${t.holdBars === 1 ? "" : "s"}. ${bal.valueAt ? "Portfolio value that day" : bal.start ? "Balance after the sale" : "Profit after the sale"}: ${money(sale.balance)}.`;
+    q(".bal-detail").textContent = `${t.side === "short" ? "Shorted" : "Bought"} ${qty(t.shares)} ${t.symbol} at ${price(t.entry)} (${money(t.shares * t.entry)}) on ${t.date}; ${t.side === "short" ? "bought back" : "sold"} at ${price(t.exit)} on ${t.exitDate}, ${exitNames[t.exitReason] || t.exitReason}: ${money(t.pnl)} (${t.retPct != null ? sgn(t.retPct) + "%" : sgn(t.netR) + "R"}) after ${t.holdBars} day${t.holdBars === 1 ? "" : "s"}. ${bal.valueAt ? "Portfolio value that day" : bal.start ? "Balance after the sale" : "Profit after the sale"}: ${money(sale.balance)}.`;
     draw();
     const m = box.querySelector(`[data-i="${i}"]`);
     if (m && m.hasAttribute("tabindex")) m.focus();
