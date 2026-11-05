@@ -40,8 +40,9 @@
           <option value="meanrev">Buy sharp dips in an uptrend</option>
           <option value="breakout">Buy new highs and ride the trend</option>
           <option value="bollinger">Buy below the lower Bollinger band</option>
+          <option value="momentum">Hold the top-ranked stocks (leaderboard)</option>
         </select>
-        <span class="help dt-ex" id="h-strategy"><strong>Dips:</strong> in a stock that is in a long-term uptrend, buy after a sudden 2-day drop and sell on the bounce, usually within a week. Wins often, small gains. <strong>New highs:</strong> buy when a stock closes above its highest price of the last 55 days and hold until it breaks below its 20-day low. Wins rarely, big gains. <strong>Bollinger band:</strong> buy when a stock closes unusually far below its 20-day average (below the lower band) and sell when it returns toward the average. Long only, never short.</span>
+        <span class="help dt-ex" id="h-strategy"><strong>Dips:</strong> in a stock that is in a long-term uptrend, buy after a sudden 2-day drop and sell on the bounce, usually within a week. Wins often, small gains. <strong>New highs:</strong> buy when a stock closes above its highest price of the last 55 days and hold until it breaks below its 20-day low. Wins rarely, big gains. <strong>Bollinger band:</strong> buy when a stock closes unusually far below its 20-day average (below the lower band) and sell when it returns toward the average. Long only unless you turn shorting on. <strong>Leaderboard:</strong> every stock gets an upside score (past momentum, or how far it has dipped below its average), and you hold only the top few. A holding is kept until its sell rule fires or a higher-ranked stock pushes it off the leaderboard. Few, big positions, and it needs the whole index at once to rank them.</span>
       </label>
       <label>History
         <select id="s-years" aria-describedby="h-years">
@@ -66,7 +67,18 @@
         <input id="s-parkrate" type="number" min="0" step="0.1" value="4" inputmode="decimal" aria-describedby="h-parkrate" />
         <span class="help dt-ex" id="h-parkrate">For a money-market fund or T-bills: the yearly rate, earned a little each trading day. Use today's rate from your account.</span>
       </label>
-      <label>Dollars per buy ($)
+      <label id="sw-sizemode-wrap">Position size
+        <select id="s-sizemode" aria-describedby="h-sizemode">
+          <option value="fixed">Fixed dollars per buy</option>
+          <option value="pct">% of the portfolio per buy</option>
+        </select>
+        <span class="help dt-ex" id="h-sizemode">How much each buy puts in. <strong>Fixed dollars:</strong> the same amount every time. <strong>% of the portfolio:</strong> a share of the whole portfolio (idle money plus stocks) at the moment of the buy, so positions grow as the account grows and shrink after losses. Bigger positions multiply a strategy's results, good or bad, so watch the "Worst drop" tile when you raise it. Changing it updates the results without re-running the test. The momentum rotation sizes itself: 100 &divide; the number of stocks held.</span>
+      </label>
+      <label id="sw-sizepct-wrap" hidden>Percent of portfolio per buy (%)
+        <input id="s-sizepct" type="number" min="0.5" max="100" step="0.5" value="5" inputmode="decimal" aria-describedby="h-sizepct" />
+        <span class="help dt-ex" id="h-sizepct">For example 5 means each buy is 5% of the portfolio. At 5%, twenty positions would use all of it. A signal is skipped when the idle money cannot cover the buy.</span>
+      </label>
+      <label id="sw-dollars-wrap">Dollars per buy ($)
         <input id="s-dollars" type="number" min="1" step="1" value="100" inputmode="decimal" aria-describedby="h-dollars" />
         <span class="help dt-ex" id="h-dollars">Spend this fixed amount on every buy, using fractional shares. It only changes the dollar figures; the R figures do not depend on it.</span>
       </label>
@@ -74,17 +86,59 @@
         <input id="s-slip" type="number" min="0" max="50" step="0.5" value="5" inputmode="decimal" aria-describedby="h-slip" />
         <span class="help dt-ex" id="h-slip">The cost of imperfect fills, charged on every buy and sell. 5 bps is 0.05%, about 5 cents on a $100 stock. This is more than the Day Trade Lab uses because stops here are filled at worse prices on fast days.</span>
       </label>
-      <label>Stop distance (ATRs)
+      <label id="sw-stop-wrap">Stop distance (ATRs)
         <input id="s-stop" type="number" min="0.5" max="10" step="0.5" value="3" inputmode="decimal" aria-describedby="h-stop" />
         <span class="help dt-ex" id="h-stop">How far below the buy price to place the stop, measured in "average true ranges": the stock's typical daily move over the last 14 days. 3 means a stop three typical days away. That distance is also the "1R" every result is measured in. Wider stops get hit less often.</span>
       </label>
-      <label class="check"><input id="s-trend" type="checkbox" checked aria-describedby="h-trend" /> Only buy in an uptrend
+      <label class="check" id="sw-trend-wrap"><input id="s-trend" type="checkbox" checked aria-describedby="h-trend" /> Only buy in an uptrend
         <span class="help dt-ex" id="h-trend">Skip any buy unless the stock's price is above its own 200-day average. This stops the dip strategy from "buying the dip" in a stock that is simply falling. With shorting on, a short needs the opposite: the price below its 200-day average.</span>
       </label>
       <label class="check"><input id="s-mkt" type="checkbox" aria-describedby="h-mkt" /> Only buy when the market is up
-        <span class="help dt-ex" id="h-mkt">Also require SPY to be above its own 200-day average. Keeps the strategy out of bear markets, which is where most of the big losses hide. With shorting on, a short needs SPY below its 200-day average.</span>
+        <span class="help dt-ex" id="h-mkt">Also require SPY to be above its own 200-day average. Keeps the strategy out of bear markets, which is where most of the big losses hide. For the momentum rotation: when SPY is below its 200-day average everything is sold and the money sits in the idle-cash setting until it recovers. With shorting on, a short needs SPY below its 200-day average.</span>
       </label>
 
+      <div class="dt-setups cols3" id="sw-mo" hidden>
+        <label>Rank stocks by
+          <select id="s-moscore" aria-describedby="h-moscore">
+            <option value="momentum">Momentum (biggest recent gain)</option>
+            <option value="dip">Oversold bounce (furthest below its average)</option>
+          </select>
+          <span class="help dt-ex" id="h-moscore"><strong>Momentum:</strong> the stocks that gained the most over the ranking period; a holding is sold when it falls off the leaderboard or its gain turns negative. <strong>Oversold bounce:</strong> the stocks that sit furthest below their own 20-day average (in standard deviations, at least 1); a holding is sold when it is back at its average or a deeper dip replaces it. Both use only past prices.</span>
+        </label>
+        <label>Check the leaderboard
+          <select id="s-moevery" aria-describedby="h-moevery">
+            <option value="month">once a month</option>
+            <option value="week">once a week</option>
+            <option value="day">every day</option>
+          </select>
+          <span class="help dt-ex" id="h-moevery">How often stocks are re-ranked and swapped. More often reacts faster but trades more, so costs and taxes grow. The ranking uses the previous day's close and trades happen at the next close.</span>
+        </label>
+        <label>Stocks to hold
+          <input id="s-mon" type="number" min="3" max="100" step="1" value="20" inputmode="numeric" aria-describedby="h-mon" />
+          <span class="help dt-ex" id="h-mon">The best-ranked stocks are held in equal amounts (100 &divide; this number, as a percent of the portfolio each). Fewer stocks is more selective and more concentrated: 5 means 20% in each, with bigger swings in both directions.</span>
+        </label>
+        <label id="sw-molook-wrap">Momentum looks back
+          <select id="s-molook" aria-describedby="h-molook">
+            <option value="3">3 months</option>
+            <option value="6">6 months</option>
+            <option value="9">9 months</option>
+            <option value="12" selected>12 months</option>
+          </select>
+          <span class="help dt-ex" id="h-molook">Stocks are ranked by how much they gained over this period. Twelve months is the classic setting; shorter reacts faster but trades more.</span>
+        </label>
+        <label id="sw-moskip-wrap">Leave out the latest
+          <select id="s-moskip" aria-describedby="h-moskip">
+            <option value="0">0 months</option>
+            <option value="1" selected>1 month</option>
+            <option value="2">2 months</option>
+          </select>
+          <span class="help dt-ex" id="h-moskip">The most recent month is left out of the ranking because last month's big winners tend to give some back. One month is the standard ("12-1" momentum).</span>
+        </label>
+        <label>Keep a holding until it falls below rank
+          <input id="s-mobuf" type="number" min="0" max="50" step="1" value="0" inputmode="numeric" aria-describedby="h-mobuf" />
+          <span class="help dt-ex" id="h-mobuf">Extra places a holding may slip before it is sold. 0 swaps a stock the moment it is outside the top group; 5 keeps it until it is outside the top group plus five places. Higher means fewer trades and less cost.</span>
+        </label>
+      </div>
       <div class="dt-setups cols3" id="sw-mr">
         <label>Buy when 2-day RSI is below
           <input id="s-rsi" type="number" min="1" max="50" step="1" value="10" inputmode="numeric" aria-describedby="h-rsi" />
@@ -169,12 +223,30 @@
       <p class="hint" id="sw-used"></p>
 
       <div id="sw-results" hidden>
-        <h3>The whole index</h3>
-        <div class="dt-tiles" id="sw-tiles"></div>
-        <p class="hint dt-ex">The older half is the first half of the tested days, the newer half the second. A real edge shows up in both. One that only pays in one half is probably a feature of that period, not of the strategy.</p>
+        <h3 class="r-only">The whole index</h3>
+        <div class="dt-tiles r-only" id="sw-tiles"></div>
+        <p class="hint dt-ex r-only">The older half is the first half of the tested days, the newer half the second. A real edge shows up in both. One that only pays in one half is probably a feature of that period, not of the strategy.</p>
 
-        <h3>Where the money is going</h3>
-        <div class="dt-tiles" id="sw-diag"></div>
+        <h3 class="r-only">Where the money is going</h3>
+        <div class="dt-tiles r-only" id="sw-diag"></div>
+
+        <div id="sw-rot" hidden>
+          <h3>The rotation</h3>
+          <div class="dt-tiles" id="sw-rot-tiles"></div>
+          <h4>What it would hold today</h4>
+          <p class="hint" id="sw-rot-note"></p>
+          <div class="table-wrap">
+            <table class="stocks dt-table">
+              <thead><tr>
+                <th class="num">#</th><th>Symbol</th><th>Sector</th>
+                <th class="num" title="Gain over the ranking period, leaving out the latest month">Momentum</th>
+                <th class="num" title="Latest close">Price</th>
+              </tr></thead>
+              <tbody id="sw-rot-picks"></tbody>
+            </table>
+          </div>
+          <p class="hint dt-ex">What the strategy would own if it rebalanced on the latest close: the top-ranked stocks. A research list, not advice, and the ranking changes every month.</p>
+        </div>
 
         <div id="sw-vs" hidden>
           <h3>Versus the S&amp;P 500</h3>
@@ -200,6 +272,7 @@
         </div>
         <p class="hint dt-ex">The most important table on this page. A strategy that makes money in most years, including the bad ones (2020 and 2022 are in the 10-year window), is much more believable than one whose total comes from a single good year. The last two columns compare each calendar year with the S&amp;P 500 (the first and last years may be part years).</p>
 
+        <div class="r-only">
         <h4>How trades ended</h4>
         <div class="table-wrap">
           <table class="stocks dt-table">
@@ -213,8 +286,9 @@
           </table>
         </div>
         <p class="hint dt-ex">Exit signal: the strategy's own sell rule fired. Stop: price fell to the stop. Gap through stop: price opened below the stop, so the loss is bigger than planned. Time limit: the trade lasted the maximum days. Still open: the data ended while the trade was open, so it is valued at the last close.</p>
+        </div>
 
-        <div id="sw-sidesbox" hidden>
+        <div id="sw-sidesbox" class="r-only" hidden>
           <h4>Longs and shorts</h4>
           <div class="table-wrap">
             <table class="stocks dt-table">
@@ -233,11 +307,11 @@
           <p class="hint dt-ex">Shows whether the shorts help or hurt. If the short side loses money or only wins by a hair, leave it off: shorting has a worse worst case than buying.</p>
         </div>
 
-        <div class="dt-chart-card">
+        <div class="dt-chart-card r-only">
           <div class="dt-chart-title">Cumulative result, in R <span class="hint" id="sw-curve-note"></span></div>
           <div id="sw-curve"></div>
         </div>
-        <p class="hint dt-ex">Every stock's trades added into one line in the order they closed. R, not dollars, so one very large position cannot hide a losing strategy.</p>
+        <p class="hint dt-ex r-only">Every stock's trades added into one line in the order they closed. R, not dollars, so one very large position cannot hide a losing strategy.</p>
 
         <div class="dt-chart-card dt-balcard" id="sw-balcard" hidden>
           <div class="dt-chart-title"><span class="bal-title">Account balance, with every buy and sell</span> <span class="hint bal-note"></span></div>
@@ -278,6 +352,7 @@
         </div>
         <p class="hint dt-ex">Each bar is one day (long ranges average a few days per bar). The bottom block is the idle money you chose above; the coloured blocks on top are the stocks held that day, the five held most often in their own colour and the rest grouped. When a signal fires you will see the bottom block shrink and a stock block appear; when the trade is sold the money flows back. Because most of the money usually sits in the idle block, "Stocks only" zooms the scale in to just the stocks so you can see positions open and close. In the full view, the line along the top is the portfolio balance and the orange line is the same starting money left in SPY. Stocks are counted at what was paid for them until they are sold. Needs a starting balance.</p>
 
+        <div class="r-only">
         <h3>By sector</h3>
         <div class="table-wrap">
           <table class="stocks dt-table">
@@ -319,6 +394,7 @@
           </table>
         </div>
         <button type="button" id="sw-more" class="dt-mini" hidden></button>
+        </div>
         <p class="hint" id="sw-failed" hidden></p>
 
         <h3>Most recent trades <span class="hint" id="sw-trades-count"></span></h3>
@@ -349,6 +425,8 @@
       <p><strong>Stops and R.</strong> The stop sits a set number of average daily ranges (ATR) below the buy price, and that distance is 1R. If a day trades through the stop the test sells at the stop price, plus slippage; if a day opens below it, it sells at the open, which can be a loss bigger than 1R.</p>
       <p><strong>No peeking.</strong> Every signal uses only prices up to that day's close, and the order fills at the next day's open. The automated tests check that changing future prices never changes a trade that already happened.</p>
       <p><strong>Limits.</strong> Yahoo's daily prices are adjusted for stock splits but not dividends, so returns are slightly understated. The stock list is today's S&amp;P 500, which leaves out companies that were removed after failing (survivorship bias) and flatters every long-only test, especially over ten years. Each stock is traded on its own with a fixed dollar amount, so this shows the strategy's edge, not the result of one real account with limited cash. Historical P/E ratios are not available from this data source (only today's), so valuation is not used here; testing it on past data would quietly use information that was unknown at the time.</p>
+      <p><strong>Leaderboard strategy.</strong> Instead of looking at one stock at a time, it scores every stock on the same day and holds only the top few, in equal amounts. The score is either past momentum (the gain over the last 3 to 12 months, leaving out the latest month) or how far a stock has dipped below its 20-day average. The ranking uses the previous day's close and trades happen at the next close, so it never looks ahead. A holding stays until it falls off the leaderboard, hits its sell rule (back at its average, for the dip score) or the market filter turns it off. Positions are sized as 100 &divide; the number of stocks, as a percent of the portfolio. "Upside" here can only be something measurable from past prices: analyst targets and valuations are not available historically, so they are not used.</p>
+      <p><strong>Position size and the worst drop.</strong> A position can be a fixed number of dollars or a percent of the portfolio at the time of the buy. Results scale with the amount invested, so changing the size updates everything without re-running the test. The "Worst drop" tile is the biggest fall from a high to a later low; compare it with the S&amp;P 500's before deciding that a higher return is worth it.</p>
     </details>
   </main>
 

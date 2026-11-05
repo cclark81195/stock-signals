@@ -214,3 +214,5 @@ body.dt-explain .dt-ex { display: block; }
   .mx-s4 { fill: #e0b83f; background: #e0b83f; }
 }
 .dt-ballegend .sw { display: inline-block; width: 11px; height: 11px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; }
+
+#sw-results.rotation .r-only { display: none !important; }

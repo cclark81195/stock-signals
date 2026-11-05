@@ -1,5 +1,6 @@
 // Swing Lab - front end (no build step, no dependencies)
-import { replayAccount, replayPark } from "./swing-account.js";
+import { replayAccount, replayPark, maxDrawdown } from "./swing-account.js";
+import { buildRotation, rotationRows, align } from "./swing-momentum.js";
 import { makeTradeChart } from "./swing-chart.js";
 import { makeMixChart } from "./swing-mix.js";
 
@@ -12,14 +13,31 @@ const sgn = (x, d = 2) => (x == null ? "-" : `${x > 0 ? "+" : x < 0 ? "−" : ""
 const pct0 = (x) => (x == null ? "-" : `${Math.round(x * 100)}%`);
 const cls = (x) => (x == null || x === 0 ? "" : x > 0 ? "pos" : "neg");
 const STRATEGY_NAMES = { meanrev: "Buy sharp dips", breakout: "Buy new highs" };
-const EXIT_NAMES = { signal: "Exit signal", stop: "Stop", "stop-gap": "Gap through stop", time: "Time limit", "data-end": "Still open at the end" };
+const EXIT_NAMES = { signal: "Exit signal", stop: "Stop", "stop-gap": "Gap through stop", time: "Time limit", "data-end": "Still open at the end", dropped: "Fell off the leaderboard", target: "Back at its average", trend: "Market filter (SPY below its 200-day)" };
 
 const STORE_KEY = "swing-lab-settings";
-const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", park: "s-park", parkRate: "s-parkrate", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", borrow: "s-borrow", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
+const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", sizeMode: "s-sizemode", sizePct: "s-sizepct", moScore: "s-moscore", moEvery: "s-moevery", moBuf: "s-mobuf", moLook: "s-molook", moSkip: "s-moskip", moN: "s-mon", park: "s-park", parkRate: "s-parkrate", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", borrow: "s-borrow", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
 const CHECKS = { trend: "s-trend", mkt: "s-mkt", bbShort: "s-bbshort" };
 const SW_BATCH = 25, SW_PARALLEL = 2;
 
-const sw = { stocks: [], rows: new Map(), dailyPnl: {}, bench: null, benchErr: false, failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, dollars: 100 };
+const sw = { stocks: [], rows: new Map(), dailyPnl: {}, bench: null, benchErr: false, failed: [], running: false, cancel: false, sort: { k: "exp", dir: -1 }, limit: 50, baseDollars: 100, isRot: false, rot: { dates: null, spy: null, closes: new Map() } };
+
+const isRotForm = () => $("s-strategy").value === "momentum";
+/** The starting balance. The rotation always runs as one account, so a blank box means $10,000 there. */
+const getBalance = () => { const b = Number($("s-balance").value) || 0; return b > 0 ? b : sw.isRot ? 10000 : 0; };
+const rotOpts = () => ({
+  score: $("s-moscore").value === "dip" ? "dip" : "momentum", every: ["day", "week"].includes($("s-moevery").value) ? $("s-moevery").value : "month",
+  buffer: Math.min(50, Math.max(0, Math.round(Number($("s-mobuf").value) || 0))),
+  lookback: (Number($("s-molook").value) || 12) * 21, skip: (Number($("s-moskip").value) || 0) * 21,
+  topN: Math.min(100, Math.max(3, Math.round(Number($("s-mon").value) || 20))), slipBps: Math.max(0, Number($("s-slip").value) || 0), spyFilter: $("s-mkt").checked,
+});
+/** How big each buy is: a share of the portfolio, or fixed dollars. dollars is the size for the fixed case. */
+function sizing() {
+  if (sw.isRot) return { pct: 100 / rotOpts().topN, dollars: 100 };
+  if ($("s-sizemode").value === "pct") return { pct: Math.min(100, Math.max(0.5, Number($("s-sizepct").value) || 5)), dollars: sw.baseDollars };
+  return { pct: null, dollars: Number($("s-dollars").value) || sw.baseDollars };
+}
+const sizeText = (z) => (z.pct ? `${+z.pct.toFixed(2)}% of the portfolio per buy` : `${money(z.dollars)} per buy`);
 
 function loadSettings() {
   let saved = null;
@@ -38,14 +56,20 @@ function saveSettings(s) { try { localStorage.setItem(STORE_KEY, JSON.stringify(
 function params(s) {
   const p = new URLSearchParams({ strategy: s.strategy, years: s.years, trend: s.trend ? "1" : "0", mkt: s.mkt ? "1" : "0" });
   const set = (k, v) => { if (v !== "" && v != null) p.set(k, v); };
-  set("dollars", s.dollars); set("slipBps", s.slipBps); set("stopAtr", s.stopAtr);
+  set("dollars", s.sizeMode === "pct" ? "100" : s.dollars); set("slipBps", s.slipBps); set("stopAtr", s.stopAtr);
   if (s.strategy === "meanrev") { set("rsiBuy", s.rsiBuy); set("exitSma", s.exitSma); set("hold", s.hold); }
   else if (s.strategy === "bollinger") { set("bbLen", s.bbLen); set("bbK", s.bbK); set("bbEntry", s.bbEntry); set("bbExit", s.bbExit); set("hold", s.bbHold); if (s.bbShort) { set("bbShort", "1"); set("borrow", s.borrow); } }
   else { set("entryLen", s.entryLen); set("exitLen", s.exitLen); set("hold", s.hold2); }
   return p;
 }
+function showSizing() {
+  const rot = isRotForm(), pct = $("s-sizemode").value === "pct";
+  $("sw-sizemode-wrap").hidden = rot; $("sw-sizepct-wrap").hidden = rot || !pct; $("sw-dollars-wrap").hidden = rot || pct;
+}
 function showStrategy() {
   const v = $("s-strategy").value;
+  $("sw-mo").hidden = v !== "momentum"; $("sw-molook-wrap").hidden = $("s-moscore").value === "dip"; $("sw-moskip-wrap").hidden = $("s-moscore").value === "dip"; $("sw-stop-wrap").hidden = v === "momentum"; $("sw-trend-wrap").hidden = v === "momentum";
+  showSizing();
   $("sw-mr").hidden = v !== "meanrev"; $("sw-bo").hidden = v !== "breakout"; $("sw-bb").hidden = v !== "bollinger"; $("sw-bbs").hidden = v !== "bollinger";
 }
 
@@ -96,7 +120,7 @@ function renderDiag(rows, all) {
   const gross = all.sumGrossR / n, net = all.sumNetR / n;
   const stopPct = d.stopPctSum / n;
   const invested = d.days ? d.holdBarsSum / d.days : 0;
-  const retPct = (all.pnl / (n * sw.dollars)) * 100;
+  const retPct = (all.pnl / (n * sw.baseDollars)) * 100;
   $("sw-diag").innerHTML = [
     tile("Average win", all.wins ? `+${(all.sumWinR / all.wins).toFixed(2)}R` : "-", "after costs", "pos", "The average winning trade."),
     tile("Average loss", losses ? `−${(all.sumLossR / losses).toFixed(2)}R` : "-", "after costs", "neg", "The average losing trade. Around −1R when stops work; more means gaps through the stop."),
@@ -136,7 +160,7 @@ const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
  * in a trade (SPY, a yearly rate, or plain cash), funds each signal from it. null without a starting balance or SPY prices.
  */
 function buildAccount(rows) {
-  const balance = Number($("s-balance").value) || 0;
+  const balance = getBalance();
   if (balance <= 0 || !sw.bench || !sw.bench.length || !rows.length) return null;
   const start = rows.map((r) => r.testStart).filter(Boolean).sort()[0];
   if (!start) return null;
@@ -147,9 +171,10 @@ function buildAccount(rows) {
   const mode = $("s-park").value, rate = Math.max(0, Number($("s-parkrate").value) || 0) / 100;
   const growth = bars.map(([, c], i) => (mode === "spy" ? c / (i ? bars[i - 1][1] : baseClose) : mode === "rate" ? Math.pow(1 + rate, 1 / 252) : 1));
   const dayList = bars.map(([d]) => d);
-  const rep = replayPark(rows, balance, sw.dollars, dayList, growth);
+  const size = sizing();
+  const rep = replayPark(rows, balance, size.dollars, dayList, growth, { pct: size.pct, base: sw.baseDollars });
   const parkName = mode === "spy" ? "S&P 500 (SPY)" : mode === "rate" ? `Idle cash at ${(rate * 100).toFixed(1)}% a year` : "Cash";
-  return { balance, mode, rate, bars, baseClose, dayList, rep, parkName, spyOnly: bars.map(([, c]) => (balance * c) / baseClose) };
+  return { balance, mode, rate, size, bars, baseClose, dayList, rep, parkName, spyOnly: bars.map(([, c]) => (balance * c) / baseClose) };
 }
 
 /**
@@ -165,7 +190,7 @@ function computeVs(rows, acct) {
   const baseClose = sw.bench[i0 - 1][1];                    // the close just before the first tested day
   const bars = sw.bench.slice(i0);
   if (bars.length < 20) return null;
-  const balance = Number($("s-balance").value) || 0;
+  const balance = getBalance();
   const account = balance > 0;
   if (account && !acct) return null;
   const dayList = bars.map(([d]) => d);
@@ -174,10 +199,13 @@ function computeVs(rows, acct) {
   if (account) {
     const rep = acct.rep;
     strat = rep.equity.map((e, i) => e / (i ? rep.equity[i - 1] : balance) - 1);
-    const inStocks = rep.equity.map((e, i) => (e > 0 ? (rep.held[i].length * sw.dollars) / e : 0));
-    extra = { equity: rep.equity, taken: rep.taken, skipped: rep.skipped, maxOpen: rep.maxOpen, balance, mode: acct.mode, rate: acct.rate, avgInStocks: mean(inStocks) };
+    const inStocks = rep.equity.map((e, i) => (e > 0 ? rep.held[i].reduce((t, h) => t + h[1], 0) / e : 0));
+    const ddS = maxDrawdown([balance, ...rep.equity]), ddB = maxDrawdown([balance, ...acct.spyOnly]);
+    const at = (k) => (k === 0 ? "the start" : dayList[k - 1]);
+    extra = { equity: rep.equity, taken: rep.taken, skipped: rep.skipped, maxOpen: rep.maxOpen, balance, mode: acct.mode, rate: acct.rate, size: acct.size, avgInStocks: mean(inStocks),
+      ddStrat: ddS.dd, ddSpy: ddB.dd, ddFrom: at(ddS.from), ddTo: at(ddS.to), ddSpyFrom: at(ddB.from), ddSpyTo: at(ddB.to) };
   } else {
-    const capital = rows.length * sw.dollars;
+    const capital = rows.length * sw.baseDollars;
     strat = dayList.map((d) => (sw.dailyPnl[d] || 0) / capital);
     extra = { capital };
   }
@@ -209,6 +237,7 @@ function computeVs(rows, acct) {
     avgAnnualStrat: mean(basis.map((y) => y.strat)), avgAnnualSpy: mean(basis.map((y) => y.spy)),
     avgDailyStrat: mean(days.map((d) => d.strat)), avgDailySpy: mean(days.map((d) => d.spy)),
     totalStrat, totalSpy, cagrStrat: cagr(totalStrat), cagrSpy: cagr(totalSpy),
+    perDrop: extra.ddStrat < 0 ? cagr(totalStrat) / -extra.ddStrat : null, perDropSpy: extra.ddSpy < 0 ? cagr(totalSpy) / -extra.ddSpy : null,
   };
 }
 
@@ -230,7 +259,7 @@ function renderVs(rows, acct) {
     tiles.push(tile("Ending balance", money(end), `S&P 500 on the same money: ${money((v.balance * v.spyClose[v.spyClose.length - 1]) / v.baseClose)}`, cls(end - v.balance),
       "What the account would hold at the end, counting a trade's profit or loss when it is sold, next to what the same starting money would be worth in SPY."));
     tiles.push(tile("Signals taken", `${v.taken.toLocaleString("en-US")}`, `${v.skipped.toLocaleString("en-US")} skipped for lack of cash; most open at once: ${v.maxOpen}`, "",
-      `The account can hold at most ${Math.floor(v.balance / sw.dollars)} buys at a time (balance divided by dollars per buy). When more signals appear than that, the extra ones are skipped, so the account's results differ from the "every signal" numbers above. A bigger balance or a smaller buy size means fewer skipped signals.`));
+      `The account can hold at most ${v.size.pct ? Math.floor(100 / v.size.pct) : Math.floor(v.balance / v.size.dollars)} buys at a time (${v.size.pct ? "100% divided by the percent per buy" : "balance divided by dollars per buy"}). When more signals appear than that, the extra ones are skipped, so the account's results differ from the "every signal" numbers above. A bigger balance or a smaller buy size means fewer skipped signals.`));
   }
   tiles.push(
     tile("Average annual return", pctFmt(v.avgAnnualStrat), `S&P 500: ${pctFmt(v.avgAnnualSpy)}`, cls(v.avgAnnualStrat), `Average of ${v.nYears} ${v.usedFull ? "full " : ""}calendar year${v.nYears === 1 ? "" : "s"}. ${diff(v.avgAnnualStrat, v.avgAnnualSpy)}. ${v.account && v.mode !== "cash" ? "This is the return on the whole portfolio: the idle money plus the trades." : "The money is mostly idle, so this is the return on all of it, not only the part that was invested."}`),
@@ -245,6 +274,8 @@ function renderVs(rows, acct) {
         v.mode === "spy" ? "Your goal in one number: how many percentage points a year the portfolio grew faster (or slower) than just holding SPY. With idle money in SPY, this is what trading on top of SPY added." : "How many percentage points a year the portfolio grew faster (or slower) than the S&P 500."),
       tile("Years ahead of the S&P 500", `${v.yearsAhead} of ${v.nYears}`, v.usedFull ? "full calendar years" : "calendar years", cls(v.yearsAhead / v.nYears - 0.5), "In how many calendar years the portfolio's return beat SPY's. Beating it consistently is more convincing than one big year."),
       tile("Ahead of SPY by", money(endBal - spyEnd), "ending balance minus the same money held in SPY", cls(endBal - spyEnd), "Dollars at the end compared with leaving the starting balance in SPY. Price only: SPY's dividends are not counted on either side."),
+      tile("Worst drop", pctFmt(v.ddStrat, 1), `S&P 500: ${pctFmt(v.ddSpy, 1)}`, cls(v.ddStrat - v.ddSpy), `The biggest fall from a high point to a later low in the portfolio's value: ${v.ddFrom} to ${v.ddTo}. The S&P 500's was ${v.ddSpyFrom} to ${v.ddSpyTo}. A deeper drop than the S&P 500's means the extra return came with extra pain, and bigger positions make it deeper.`),
+      tile("Growth per unit of drop", v.perDrop == null ? "-" : v.perDrop.toFixed(2), `S&P 500: ${v.perDropSpy == null ? "-" : v.perDropSpy.toFixed(2)}`, v.perDrop == null || v.perDropSpy == null ? "" : cls(v.perDrop - v.perDropSpy), "Compound growth per year divided by the worst drop. Higher means more growth for the pain taken. Beating the S&P 500 on this, not just on growth, is the sign the edge is not simply more risk."),
       tile("Share held in stocks", `${((v.avgInStocks || 0) * 100).toFixed(1)}%`, "of the portfolio, on average", "", "How much of the portfolio sat in trades rather than in the idle money, averaged over all days. Small numbers mean the portfolio is mostly the idle money's return."),
     );
   }
@@ -252,8 +283,8 @@ function renderVs(rows, acct) {
   const idle = v.mode === "spy" ? "idle money held in SPY (SPY is sold to fund each buy at that day's close and bought back when the trade is sold; dividends not counted)"
     : v.mode === "rate" ? `idle money earning ${(v.rate * 100).toFixed(1)}% a year` : "idle cash earning nothing";
   $("sw-vs-note").textContent = v.account
-    ? `Strategy: one account starting with ${money(v.balance)}, ${money(sw.dollars)} per buy, profit counted when a trade is sold, ${idle}. S&P 500: the same money in SPY, price only.`
-    : `Strategy: ${money(v.capital)} set aside (one ${money(sw.dollars)} slot per stock, every signal taken), idle cash earning nothing. S&P 500: SPY price only. Enter a starting balance above to test a single account with limited cash.`;
+    ? `Strategy: one account starting with ${money(v.balance)}, ${sizeText(v.size)}, profit counted when a trade is sold, ${idle}. S&P 500: the same money in SPY, price only.`
+    : `Strategy: ${money(v.capital)} set aside (one ${money(sw.baseDollars)} slot per stock, every signal taken), idle cash earning nothing. S&P 500: SPY price only. Enter a starting balance above to test a single account with limited cash.`;
 }
 
 function renderCurve(curve) {
@@ -310,18 +341,19 @@ function renderStocks() {
 function renderTrades(trades) {
   const shown = [...trades].sort((a, b) => b.exitTime - a.exitTime).slice(0, 300);
   $("sw-trades-count").textContent = `(newest ${shown.length} of ${trades.length.toLocaleString("en-US")})`;
+  const rot = shown.some((t) => t.retPct != null);
   $("sw-trades").innerHTML = shown.map((t) => `<tr><td>${esc(t.date)}</td><td>${esc(t.exitDate)}</td><td><strong>${esc(t.symbol)}</strong>${t.side === "short" ? ` <span class="dt-pill err">short</span>` : ""}</td>
       <td class="num">${price(t.entry)}</td><td class="num">${price(t.exit)}</td><td class="num">${qty(t.shares)}</td><td class="num">${t.holdBars}</td>
-      <td>${esc(EXIT_NAMES[t.exitReason] || t.exitReason)}</td><td class="num ${cls(t.netR)}">${sgn(t.netR)}R</td><td class="num ${cls(t.pnl)}">${money(t.pnl)}</td></tr>`).join("");
+      <td>${esc(EXIT_NAMES[t.exitReason] || t.exitReason)}</td><td class="num ${cls(t.retPct != null ? t.retPct : t.netR)}">${t.retPct != null ? sgn(t.retPct) + "%" : sgn(t.netR) + "R"}</td><td class="num ${cls(t.pnl)}">${money(t.pnl)}</td></tr>`).join("");
   const pnl = shown.reduce((s, t) => s + t.pnl, 0), r = shown.reduce((s, t) => s + t.netR, 0);
-  $("sw-trades-foot").innerHTML = shown.length ? `<tr><td colspan="8"><strong>Total of the ${shown.length} shown</strong></td><td class="num ${cls(r)}"><strong>${sgn(r)}R</strong></td><td class="num ${cls(pnl)}"><strong>${money(pnl)}</strong></td></tr>` : "";
+  $("sw-trades-foot").innerHTML = shown.length ? `<tr><td colspan="8"><strong>Total of the ${shown.length} shown</strong></td><td class="num ${cls(r)}"><strong>${rot ? "" : sgn(r) + "R"}</strong></td><td class="num ${cls(pnl)}"><strong>${money(pnl)}</strong></td></tr>` : "";
 }
 
 const tradeChart = makeTradeChart($("sw-balcard"), { esc, money, sgn, price, qty, exitNames: EXIT_NAMES });
 
 /** The balance chart with a marker per buy and sell. Redrawn after every batch, so it grows as the scan runs. */
 function renderTradeChart(rows, all, final, acct) {
-  const balance = Number($("s-balance").value) || 0;
+  const balance = getBalance();
   if (!all.length) { tradeChart.render([], 0); return; }
   if (balance <= 0) { tradeChart.render(all, 0, { settle: final, title: "Profit and loss, with every buy and sell (every signal, no cash limit)" }); return; }
   let takenList, spy = null, valueAt = null, title = "Account balance, with every buy and sell";
@@ -336,7 +368,7 @@ function renderTradeChart(rows, all, final, acct) {
     }
   } else {
     const dates = [...new Set(all.flatMap((t) => [t.date, t.exitDate]))].sort();
-    takenList = replayAccount(rows, balance, sw.dollars, dates).takenList;
+    takenList = replayAccount(rows, balance, sw.baseDollars, dates).takenList;
   }
   tradeChart.render(takenList, balance, { spy, valueAt, settle: final, title });
 }
@@ -345,13 +377,13 @@ const mixChart = makeMixChart($("sw-mixcard"), { esc, money });
 function renderMix(acct) {
   if (!acct || !acct.rep.takenList.length) { mixChart.render(null); return; }
   const r = acct.rep;
-  mixChart.render({ dates: acct.dayList, equity: r.equity, park: r.park, held: r.held, spyOnly: acct.spyOnly, dollars: sw.dollars, parkName: acct.parkName });
+  mixChart.render({ dates: acct.dayList, equity: r.equity, park: r.park, held: r.held, spyOnly: acct.spyOnly, parkName: acct.parkName });
 }
 
 function render(final = false) {
   const rows = [...sw.rows.values()];
   if (!rows.length) { $("sw-results").hidden = true; return; }
-  $("sw-results").hidden = false;
+  $("sw-results").hidden = false; $("sw-results").classList.remove("rotation"); $("sw-rot").hidden = true;
   const all = sum(rows), first = sum(rows, "first"), second = sum(rows, "second");
   const acct = buildAccount(rows);
   if (final) renderVs(rows, acct);
@@ -377,10 +409,84 @@ function render(final = false) {
   renderCurve([...trades].sort((a, b) => a.exitTime - b.exitTime).map((t) => { cum += t.netR; return { cumR: Math.round(cum * 100) / 100, date: t.exitDate }; }));
   renderTradeChart(rows, trades, final, acct);
   renderMix(acct);
-  renderTrades(trades);
+  renderTrades(acct ? acct.rep.takenList : trades);
   const n = sw.failed.length;
   $("sw-failed").hidden = !n;
   $("sw-failed").textContent = n ? `${n} stock${n === 1 ? "" : "s"} could not be tested (usually Yahoo rate-limiting or missing data): ${sw.failed.slice(0, 40).join(", ")}${n > 40 ? ", ..." : ""}. Use "Retry failed" to try them again.` : "";
+  $("sw-retry").hidden = !n || sw.running;
+  $("sw-csv").hidden = false;
+}
+
+// ---------------------------------------------------------------- momentum / leaderboard rotation
+/** Add one batch of aligned closes. All stocks are lined up on the first batch's calendar (SPY's). */
+function ingestPrices(data) {
+  const r = sw.rot;
+  if (!r.dates) { r.dates = data.dates; r.spy = data.spy; }
+  for (const [sym, arr] of Object.entries(data.closes || {})) r.closes.set(sym, align(data.dates, arr, r.dates));
+  sw.bench = r.dates.map((d, i) => [d, r.spy[i]]);
+}
+
+function renderRotTiles(rot, rows, o, takenList) {
+  const n = rot.trades.length, wins = rot.trades.filter((t) => t.pnl > 0).length;
+  const avgRet = n ? rot.trades.reduce((s, t) => s + t.retPct, 0) / n : null;
+  const avgHold = n ? rot.trades.reduce((s, t) => s + t.holdBars, 0) / n : null;
+  const years = rot.testStart && sw.rot.dates ? (sw.rot.dates.length - sw.rot.dates.indexOf(rot.testStart)) / 252 : 0;
+  const tiles = [
+    tile("Stocks ranked", String(rot.universe), `${rows.length} traded`, "", "Stocks loaded and scored. A stock with too little price history is skipped until it has enough."),
+    tile("Checks", rot.rebalances.toLocaleString("en-US"), { month: "monthly", week: "weekly", day: "daily" }[o.every], "", "How many times the leaderboard was checked and swapped."),
+    tile("Trades", n.toLocaleString("en-US"), years ? `about ${(n / years).toFixed(0)} a year` : "", "", "Positions opened and closed. A stock that stays on the leaderboard is kept without trading, so this is much lower than the number of checks times the number of stocks."),
+    tile("Win rate", n ? pct0(wins / n) : "-", "", "", "Share of positions that made money after slippage."),
+    tile("Average trade", avgRet == null ? "-" : `${sgn(avgRet)}%`, "per position, after slippage", cls(avgRet), "Average percentage gain or loss of one position from buy to sell."),
+    tile("Average hold", avgHold == null ? "-" : `${avgHold.toFixed(0)} days`, "", "", "How long a position was kept on average (trading days)."),
+  ];
+  if (o.spyFilter) tiles.push(tile("Market filter", rot.filterOff ? "Out of stocks" : "In stocks", "SPY vs its 200-day average", rot.filterOff ? "neg" : "pos", "With the filter on, everything is sold while SPY is below its 200-day average and the money sits in your idle-cash setting."));
+  $("sw-rot-tiles").innerHTML = tiles.join("");
+}
+
+function renderPicks(rot, o) {
+  const sec = (sym) => (sw.stocks.find((x) => x.symbol === sym) || {}).sector || "";
+  const label = o.score === "dip" ? "Dip below average" : "Momentum";
+  $("sw-rot-note").textContent = rot.filterOff
+    ? "The market filter is on and SPY is below its 200-day average, so the strategy would hold nothing right now."
+    : rot.picks.length ? `Ranked on the latest close among ${rot.universe} stocks. ${o.score === "dip" ? "The score is how many standard deviations below its 20-day average each stock is." : "The score is each stock's gain over the ranking period."}`
+    : "Nothing currently qualifies: no stock has a score above the minimum.";
+  $("sw-rot-picks").innerHTML = rot.picks.map((p, i) => `<tr><td class="num">${i + 1}</td><td><strong>${esc(p.symbol)}</strong></td><td class="tight">${esc(sec(p.symbol))}</td>
+      <td class="num pos">${o.score === "dip" ? `${p.score.toFixed(1)} dev. below` : `${sgn(p.score * 100, 1)}%`}</td><td class="num">${price(p.price)}</td></tr>`).join("") || `<tr><td colspan="5" class="dt-empty">None.</td></tr>`;
+  document.querySelector("#sw-rot thead th:nth-child(4)").textContent = label;
+}
+
+function renderRotYears(takenList) {
+  const by = new Map();
+  for (const t of takenList) { const y = t.date.slice(0, 4); const e = by.get(y) || { n: 0, w: 0, pnl: 0 }; e.n++; if (t.pnl > 0) e.w++; e.pnl += t.pnl; by.set(y, e); }
+  const vsYears = new Map((sw.vs?.years || []).map((y) => [y.year, y]));
+  const keys = [...new Set([...by.keys(), ...vsYears.keys()])].sort();
+  $("sw-years").innerHTML = keys.map((y) => {
+    const v = by.get(y), r = vsYears.get(y);
+    return `<tr><td>${esc(y)}${r?.part ? ` <span class="hint">(part year)</span>` : ""}</td><td class="num">${v ? v.n : 0}</td><td class="num">${v ? pct0(v.w / v.n) : "-"}</td><td class="num">-</td>
+      <td class="num ${cls(v?.pnl)}">${v ? money(v.pnl) : "-"}</td><td class="num ${cls(r?.strat)}">${r ? pctFmt(r.strat) : "-"}</td><td class="num ${cls(r?.spy)}">${r ? pctFmt(r.spy) : "-"}</td></tr>`;
+  }).join("");
+}
+
+function renderRotation(final = false) {
+  const r = sw.rot;
+  if (!r.dates || !r.closes.size) { $("sw-results").hidden = true; return; }
+  $("sw-results").hidden = false; $("sw-results").classList.add("rotation"); $("sw-rot").hidden = false; $("sw-sidesbox").hidden = true;
+  const o = rotOpts();
+  const rot = buildRotation(r.dates, r.closes, r.spy, o);
+  sw.rotResult = rot;
+  const rows = rotationRows(rot);
+  sw.rows = new Map(rows.map((x) => [x.symbol, x]));
+  const acct = buildAccount(rows);
+  if (final) renderVs(rows, acct);
+  renderRotTiles(rot, rows, o, acct ? acct.rep.takenList : rot.trades);
+  renderPicks(rot, o);
+  renderRotYears(acct ? acct.rep.takenList : rot.trades);
+  renderTradeChart(rows, rot.trades, final, acct);
+  renderMix(acct);
+  renderTrades(acct ? acct.rep.takenList : rot.trades);
+  const n = sw.failed.length;
+  $("sw-failed").hidden = !n;
+  $("sw-failed").textContent = n ? `${n} stock${n === 1 ? "" : "s"} could not be loaded (usually Yahoo rate-limiting or missing data): ${sw.failed.slice(0, 40).join(", ")}${n > 40 ? ", ..." : ""}. Use "Retry failed" to try them again.` : "";
   $("sw-retry").hidden = !n || sw.running;
   $("sw-csv").hidden = false;
 }
@@ -392,6 +498,11 @@ function progress(done, total, extra = "") {
 }
 function settingsNote(s) {
   const bbExit = { mid: "the average", half: "halfway to the upper band", upper: "the upper band" }[s.bbExit] || "the average";
+  if (s.strategy === "momentum") {
+    const o = rotOpts();
+    const rank = o.score === "dip" ? "how far each stock is below its 20-day average (at least 1 deviation)" : `the ${s.moLook}-month gain${Number(s.moSkip) ? ` leaving out the latest ${s.moSkip} month${s.moSkip === "1" ? "" : "s"}` : ""}`;
+    return `Settings used: leaderboard ranked by ${rank}; hold the top ${o.topN} equally (${+(100 / o.topN).toFixed(2)}% each), checked ${{ month: "monthly", week: "weekly", day: "daily" }[o.every]}${o.buffer ? `, kept until they fall ${o.buffer} places below the group` : ""}${o.spyFilter ? "; all sold when SPY is below its 200-day average" : ""}; ${s.slipBps} bps slippage; ${s.years} years.`;
+  }
   const strat = s.strategy === "meanrev"
     ? `buy dips (2-day RSI under ${s.rsiBuy}, sell above the ${s.exitSma}-day average, ${Number(s.hold) > 0 ? `${s.hold}-day limit` : "no time limit"})`
     : s.strategy === "bollinger"
@@ -408,15 +519,17 @@ async function run(only = null) {
   const universe = typed.length ? typed : sw.stocks.map((x) => x.symbol);
   if (!universe.length) { $("sw-status").className = "status error"; $("sw-status").textContent = "The stock list has not loaded yet. Type some symbols above or reload the page."; return; }
   const symbols = only || universe;
-  if (!only) { sw.rows.clear(); sw.dailyPnl = {}; tradeChart.reset(); mixChart.reset(); }
+  const rotRun = s.strategy === "momentum";
+  if (!only || sw.isRot !== rotRun) { sw.rows.clear(); sw.dailyPnl = {}; sw.rot = { dates: null, spy: null, closes: new Map() }; tradeChart.reset(); mixChart.reset(); }
+  sw.isRot = rotRun;
   sw.bench = null; sw.benchErr = false; sw.vs = null;
-  const benchP = fetch(`/api/swing?bench=1&years=${encodeURIComponent(s.years)}`).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || r.status); sw.bench = d.bench; })).catch(() => { sw.benchErr = true; });
+  const benchP = rotRun ? Promise.resolve() : fetch(`/api/swing?bench=1&years=${encodeURIComponent(s.years)}`).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || r.status); sw.bench = d.bench; })).catch(() => { sw.benchErr = true; });
   sw.failed = []; sw.running = true; sw.cancel = false;
-  sw.dollars = Number(s.dollars) || 100;
+  sw.baseDollars = rotRun || s.sizeMode === "pct" ? 100 : Number(s.dollars) || 100;
   $("sw-used").textContent = settingsNote(s);
   $("sw-run").disabled = true; $("sw-cancel").hidden = false; $("sw-retry").hidden = true; $("sw-progress").hidden = false;
   $("sw-status").className = "status";
-  $("sw-status").textContent = (only ? "Retrying the stocks that failed..." : `Testing ${symbols.length} stock${symbols.length === 1 ? "" : "s"} on up to ${s.years} years of daily prices...`) + " The charts and tables fill in as results arrive.";
+  $("sw-status").textContent = (only ? "Retrying the stocks that failed..." : rotRun ? `Loading ${s.years} years of daily prices for ${symbols.length} stock${symbols.length === 1 ? "" : "s"} to rank them...` : `Testing ${symbols.length} stock${symbols.length === 1 ? "" : "s"} on up to ${s.years} years of daily prices...`) + " The charts and tables fill in as results arrive.";
 
   const queue = [];
   for (let i = 0; i < symbols.length; i += SW_BATCH) queue.push(symbols.slice(i, i + SW_BATCH));
@@ -427,21 +540,29 @@ async function run(only = null) {
       const batch = queue.shift();
       if (!batch) return;
       try {
-        const qs = params(s);
-        qs.set("symbols", batch.join(","));
-        const r = await fetch(`/api/swing?${qs}`);
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
-        (data.warnings || []).forEach((w) => warnings.add(w));
-        for (const [dt, v] of Object.entries(data.dailyPnl || {})) sw.dailyPnl[dt] = (sw.dailyPnl[dt] || 0) + v;
-        for (const row of data.symbols || []) { if (row.error || !row.all) sw.failed.push(row.symbol); else sw.rows.set(row.symbol, row); }
+        if (rotRun) {
+          const r = await fetch(`/api/swing?mode=prices&years=${encodeURIComponent(s.years)}&symbols=${encodeURIComponent(batch.join(","))}`);
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
+          ingestPrices(data);
+          sw.failed.push(...Object.keys(data.errors || {}));
+        } else {
+          const qs = params(s);
+          qs.set("symbols", batch.join(","));
+          const r = await fetch(`/api/swing?${qs}`);
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
+          (data.warnings || []).forEach((w) => warnings.add(w));
+          for (const [dt, v] of Object.entries(data.dailyPnl || {})) sw.dailyPnl[dt] = (sw.dailyPnl[dt] || 0) + v;
+          for (const row of data.symbols || []) { if (row.error || !row.all) sw.failed.push(row.symbol); else sw.rows.set(row.symbol, row); }
+        }
       } catch (e) {
         lastErr = e.message || String(e);
         sw.failed.push(...batch);
       }
       done += batch.length;
       progress(done, symbols.length, sw.failed.length ? `, ${sw.failed.length} failed` : "");
-      render();
+      draw(false);
     }
   };
   await Promise.all([benchP, ...Array.from({ length: SW_PARALLEL }, worker)]);
@@ -450,13 +571,24 @@ async function run(only = null) {
   sw.running = false;
   $("sw-cancel").hidden = true; $("sw-run").disabled = false; $("sw-progress").hidden = true;
   if (stopped) sw.failed.push(...queue.flat());
-  render(true);
+  draw(true);
   $("sw-updated").textContent = `Last run ${new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
-  $("sw-status").className = sw.rows.size ? "status" : "status error";
-  $("sw-status").textContent = (stopped ? "Stopped. " : "Done. ") + `${sw.rows.size} stocks tested${sw.failed.length ? `, ${sw.failed.length} not tested${lastErr ? ` (last error: ${lastErr})` : ""}` : ""}.` + (warnings.size ? " " + [...warnings].join(" ") : "");
+  const nDone = sw.isRot ? sw.rot.closes.size : sw.rows.size;
+  $("sw-status").className = nDone ? "status" : "status error";
+  $("sw-status").textContent = (stopped ? "Stopped. " : "Done. ") + `${nDone} stocks ${sw.isRot ? "ranked" : "tested"}${sw.failed.length ? `, ${sw.failed.length} not tested${lastErr ? ` (last error: ${lastErr})` : ""}` : ""}.` + (warnings.size ? " " + [...warnings].join(" ") : "");
 }
 
 function csv() {
+  if (sw.isRot && sw.rotResult) {
+    const lines = ["bought,sold,symbol,entry_price,exit_price,days,exit_reason,return_pct"];
+    for (const t of sw.rotResult.trades) lines.push([t.date, t.exitDate, t.symbol, t.entry.toFixed(4), t.exit.toFixed(4), t.holdBars, t.exitReason, t.retPct.toFixed(3)].join(","));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
+    a.download = `leaderboard-trades-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    return;
+  }
   const head = ["symbol", "sector", "trades", "win_rate", "net_r_per_trade", "gross_r_per_trade", "total_net_r", "pnl_dollars", "older_half_trades", "older_half_net_r_per_trade", "newer_half_trades", "newer_half_net_r_per_trade", "buy_and_hold_pct"];
   const f = (x, d = 4) => (x == null ? "" : Number(x).toFixed(d));
   const lines = [head.join(",")];
@@ -484,9 +616,16 @@ async function loadStocks() {
 $("s-strategy").addEventListener("change", showStrategy);
 const showPark = () => { $("sw-parkrate-wrap").hidden = $("s-park").value !== "rate"; };
 // The balance and what idle money does are only used on this page, so changing them updates the results without a new run.
-const rerender = () => { if (!sw.running && sw.rows.size) { sw.dollars = Number($("s-dollars").value) || sw.dollars; render(true); } };
+const draw = (final) => (sw.isRot ? renderRotation(final) : render(final));
+const hasResults = () => (sw.isRot ? sw.rot.closes.size > 0 : sw.rows.size > 0);
+const rerender = () => { if (!sw.running && hasResults()) { if (sw.isRot) $("sw-used").textContent = settingsNote(readForm()); draw(true); } };
 $("s-balance").addEventListener("change", rerender);
 $("s-park").addEventListener("change", () => { showPark(); rerender(); });
+$("s-sizemode").addEventListener("change", () => { showSizing(); rerender(); });
+for (const id of ["s-sizepct", "s-dollars"]) $(id).addEventListener("change", rerender);
+// the rotation ranks from prices already in memory, so its settings update the results without re-downloading
+$("s-moscore").addEventListener("change", () => { showStrategy(); if (sw.isRot) rerender(); });
+for (const id of ["s-moevery", "s-mon", "s-molook", "s-moskip", "s-mobuf", "s-mkt", "s-slip"]) $(id).addEventListener("change", () => { if (sw.isRot) rerender(); });
 $("s-parkrate").addEventListener("change", rerender);
 $("sw-form").addEventListener("submit", (e) => { e.preventDefault(); run(); });
 $("sw-run").addEventListener("click", () => run());
