@@ -444,3 +444,22 @@ test("constituents: join dates are kept only when they are real ISO dates", () =
   assert.equal(isoDate("1957-03-04 (as part of the S&P 500)"), "1957-03-04");
   assert.equal(isoDate(""), ""); assert.equal(isoDate("Nov 2025"), ""); assert.equal(isoDate(undefined), "");
 });
+
+// ---- stock lists for the Swing Lab
+test("etf stock list: no SPY, no duplicates, every row has a group", async () => {
+  const { ETF_UNIVERSE } = await import("../lib/etf-universe.js");
+  const syms = ETF_UNIVERSE.map((x) => x.symbol);
+  assert.ok(syms.length >= 40);
+  assert.equal(new Set(syms).size, syms.length);
+  assert.ok(!syms.includes("SPY"), "SPY is the benchmark");
+  assert.ok(ETF_UNIVERSE.every((x) => x.sector && /^[A-Z]{2,5}$/.test(x.symbol)));
+});
+
+test("symbols api: ?list=etfs returns the ETF list without SPY or crypto rows", async () => {
+  const { default: handler } = await import("../api/daytrade-symbols.js");
+  const out = {};
+  await handler({ query: { list: "etfs" } }, { setHeader() {}, status(c) { out.c = c; return this; }, json(x) { out.b = x; } });
+  assert.equal(out.c, 200);
+  assert.equal(out.b.loaded, true);
+  assert.ok(out.b.options.length >= 40 && out.b.options.every((o) => o.tag && o.tag !== "Crypto" && o.symbol !== "SPY"));
+});

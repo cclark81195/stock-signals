@@ -16,7 +16,7 @@ const STRATEGY_NAMES = { meanrev: "Buy sharp dips", breakout: "Buy new highs" };
 const EXIT_NAMES = { signal: "Exit signal", stop: "Stop", "stop-gap": "Gap through stop", time: "Time limit", "data-end": "Still open at the end", dropped: "Fell off the leaderboard", target: "Back at its average", trend: "Market filter (SPY below its 200-day)" };
 
 const STORE_KEY = "swing-lab-settings";
-const FIELDS = { strategy: "s-strategy", years: "s-years", balance: "s-balance", sizeMode: "s-sizemode", sizePct: "s-sizepct", moScore: "s-moscore", moSec: "s-mosec", moEvery: "s-moevery", moBuf: "s-mobuf", moStop: "s-mostop", moLook: "s-molook", moSkip: "s-moskip", moN: "s-mon", park: "s-park", parkRate: "s-parkrate", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", borrow: "s-borrow", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
+const FIELDS = { strategy: "s-strategy", universe: "s-universe", years: "s-years", balance: "s-balance", sizeMode: "s-sizemode", sizePct: "s-sizepct", moScore: "s-moscore", moSec: "s-mosec", moEvery: "s-moevery", moBuf: "s-mobuf", moStop: "s-mostop", moLook: "s-molook", moSkip: "s-moskip", moN: "s-mon", park: "s-park", parkRate: "s-parkrate", dollars: "s-dollars", slipBps: "s-slip", stopAtr: "s-stop", rsiBuy: "s-rsi", exitSma: "s-exma", hold: "s-hold", bbLen: "s-bblen", bbK: "s-bbk", bbHold: "s-bbhold", bbEntry: "s-bbentry", bbExit: "s-bbexit", borrow: "s-borrow", entryLen: "s-elen", exitLen: "s-xlen", hold2: "s-hold2", symbols: "s-symbols" };
 const CHECKS = { trend: "s-trend", mkt: "s-mkt", bbShort: "s-bbshort", moJoin: "s-mojoin", moVol: "s-movol" };
 const SW_BATCH = 25, SW_PARALLEL = 2;
 
@@ -25,15 +25,19 @@ const sw = { stocks: [], rows: new Map(), dailyPnl: {}, bench: null, benchErr: f
 const isRotForm = () => $("s-strategy").value === "momentum";
 /** The starting balance. The rotation always runs as one account, so a blank box means $10,000 there. */
 const getBalance = () => { const b = Number($("s-balance").value) || 0; return b > 0 ? b : sw.isRot ? 10000 : 0; };
-const rotOpts = () => ({
+const listNow = () => sw.runStocks || sw.stocks;                     // the list the results on screen were run on
+const rotOpts = () => {
+  const dates = new Map(listNow().filter((x) => x.added).map((x) => [x.symbol, x.added])), want = $("s-mojoin").checked;
+  return {
   score: $("s-moscore").value === "dip" ? "dip" : "momentum", every: ["day", "week"].includes($("s-moevery").value) ? $("s-moevery").value : "month",
-  joined: $("s-mojoin").checked ? new Map(sw.stocks.filter((x) => x.added).map((x) => [x.symbol, x.added])) : null,
-  sectors: new Map(sw.stocks.map((x) => [x.symbol, x.sector])), sectorCap: Math.min(100, Math.max(0, Math.round(Number($("s-mosec").value) || 0))),
+  joined: want && dates.size ? dates : null, joinNA: want && !dates.size,
+  sectors: new Map(listNow().map((x) => [x.symbol, x.sector])), sectorCap: Math.min(100, Math.max(0, Math.round(Number($("s-mosec").value) || 0))),
   buffer: Math.min(50, Math.max(0, Math.round(Number($("s-mobuf").value) || 0))),
   lookback: (Number($("s-molook").value) || 12) * 21, skip: (Number($("s-moskip").value) || 0) * 21,
   topN: Math.min(100, Math.max(3, Math.round(Number($("s-mon").value) || 20))), slipBps: Math.max(0, Number($("s-slip").value) || 0), spyFilter: $("s-mkt").checked,
   trailStop: Math.min(90, Math.max(0, Number($("s-mostop").value) || 0)), volSize: $("s-movol").checked,
-});
+  };
+};
 /** How big each buy is: a share of the portfolio, or fixed dollars. dollars is the size for the fixed case. */
 function sizing(topN) {
   if (sw.isRot) return { pct: 100 / (topN || rotOpts().topN), dollars: 100 };
@@ -103,7 +107,7 @@ function tile(label, value, sub = "", klass = "", desc = "") {
 }
 
 function renderTiles(rows, all, first, second) {
-  const total = sw.stocks.length || rows.length;
+  const total = listNow().length || rows.length;
   $("sw-tiles").innerHTML = [
     tile("Stocks tested", String(rows.length), `of ${total}`, "", "Stocks tested without an error. A stock with no trades still counts."),
     tile("Trades", all.trades.toLocaleString("en-US"), `${rows.filter((r) => r.all.trades).length} stocks traded`, "", "Total simulated trades across every stock. Thousands of trades make the average trustworthy; a few dozen do not."),
@@ -327,7 +331,7 @@ function renderCurve(curve) {
 }
 
 function rowView(r) {
-  const sector = (sw.stocks.find((x) => x.symbol === r.symbol) || {}).sector || "";
+  const sector = (listNow().find((x) => x.symbol === r.symbol) || {}).sector || "";
   const a = r.all;
   return { symbol: r.symbol, sector, trades: a.trades, winRate: a.trades ? a.wins / a.trades : null, exp: exp(a), totalR: a.sumNetR, pnl: a.pnl,
     expFirst: exp(r.first), nFirst: r.first.trades, expSecond: exp(r.second), nSecond: r.second.trades, holdPct: r.holdPct, expGross: a.trades ? a.sumGrossR / a.trades : null };
@@ -410,7 +414,7 @@ function render(final = false) {
 
   const bySector = new Map();
   for (const r of rows) {
-    const sec = (sw.stocks.find((x) => x.symbol === r.symbol) || {}).sector || "Other";
+    const sec = (listNow().find((x) => x.symbol === r.symbol) || {}).sector || "Other";
     if (!bySector.has(sec)) bySector.set(sec, []);
     bySector.get(sec).push(r);
   }
@@ -457,7 +461,7 @@ function renderRotTiles(rot, rows, o, takenList) {
     tile("Average trade", avgRet == null ? "-" : `${sgn(avgRet)}%`, "per position, after slippage", cls(avgRet), "Average percentage gain or loss of one position from buy to sell."),
     tile("Average hold", avgHold == null ? "-" : `${avgHold.toFixed(0)} days`, "", "", "How long a position was kept on average (trading days)."),
   ];
-  tiles.push(tile("Index join dates", o.joined ? "Applied" : "Off", o.joined ? "ranked only after joining" : "hindsight in the stock list", o.joined ? "pos" : "neg", "With this on, a stock can only be ranked from the day it joined the S&P 500, which removes the advantage of knowing which stocks would later be added. Turn it off to see how much that hindsight was worth."));
+  tiles.push(tile("Index join dates", o.joined ? "Applied" : o.joinNA ? "Not available" : "Off", o.joined ? "ranked only after joining" : o.joinNA ? "this list has no join dates" : "hindsight in the stock list", o.joined ? "pos" : "neg", "With this on, a stock can only be ranked from the day it joined the S&P 500, which removes the advantage of knowing which stocks would later be added. Turn it off to see how much that hindsight was worth."));
   if (o.trailStop > 0) { const k = rot.trades.filter((t) => t.exitReason === "stop").length; tiles.push(tile("Stopped out", String(k), n ? `${pct0(k / n)} of positions` : "", "", `Positions sold because the close fell ${o.trailStop}% below the highest close since the buy. Each sale fills at the next close.`)); }
   if (o.volSize) { const ws = rot.trades.map((t) => t.w).filter((w) => w != null); const avg = ws.length ? ws.reduce((a, b) => a + b, 0) / ws.length : null; tiles.push(tile("Average size", avg == null ? "-" : `${avg.toFixed(2)}x`, "vs equal weight", "", "Average of each position's size relative to the normal equal share. Below 1x means the picks were wilder than the typical stock.")); }
   if (o.spyFilter) tiles.push(tile("Market filter", rot.filterOff ? "Out of stocks" : "In stocks", "SPY vs its 200-day average", rot.filterOff ? "neg" : "pos", "With the filter on, everything is sold while SPY is below its 200-day average and the money sits in your idle-cash setting."));
@@ -465,7 +469,7 @@ function renderRotTiles(rot, rows, o, takenList) {
 }
 
 function renderPicks(rot, o) {
-  const sec = (sym) => (sw.stocks.find((x) => x.symbol === sym) || {}).sector || "";
+  const sec = (sym) => (listNow().find((x) => x.symbol === sym) || {}).sector || "";
   const label = o.score === "dip" ? "Dip below average" : "Momentum";
   $("sw-rot-note").textContent = rot.filterOff
     ? "The market filter is on and SPY is below its 200-day average, so the strategy would hold nothing right now."
@@ -557,7 +561,7 @@ function settingsNote(s) {
   if (s.strategy === "momentum") {
     const o = rotOpts();
     const rank = o.score === "dip" ? "how far each stock is below its 20-day average (at least 1 deviation)" : `the ${s.moLook}-month gain${Number(s.moSkip) ? ` leaving out the latest ${s.moSkip} month${s.moSkip === "1" ? "" : "s"}` : ""}`;
-    return `Settings used: leaderboard ranked by ${rank}; hold the top ${o.topN} equally (${+(100 / o.topN).toFixed(2)}% each), checked ${{ month: "monthly", week: "weekly", day: "daily" }[o.every]}${o.buffer ? `, kept until they fall ${o.buffer} places below the group` : ""}${o.spyFilter ? "; all sold when SPY is below its 200-day average" : ""}${o.joined ? "; stocks ranked only after they joined the S&P 500" : "; ranks today's members for the whole period (hindsight)"}${o.sectorCap ? `; at most ${o.sectorCap} per sector` : ""}${o.trailStop ? `; ${o.trailStop}% trailing stop (21-day lockout)` : ""}${o.volSize ? "; positions scaled by volatility" : ""}; ${s.slipBps} bps slippage; ${s.years} years.`;
+    return `Settings used: leaderboard ranked by ${rank}; hold the top ${o.topN} equally (${+(100 / o.topN).toFixed(2)}% each), checked ${{ month: "monthly", week: "weekly", day: "daily" }[o.every]}${o.buffer ? `, kept until they fall ${o.buffer} places below the group` : ""}${o.spyFilter ? "; all sold when SPY is below its 200-day average" : ""}${o.joined ? "; stocks ranked only after they joined the S&P 500" : "; ranks today's list for the whole period (hindsight)"}${s.universe && s.universe !== "sp500" ? `; stock list: ${LIST_NAMES[s.universe] || s.universe}` : ""}${o.sectorCap ? `; at most ${o.sectorCap} per sector` : ""}${o.trailStop ? `; ${o.trailStop}% trailing stop (21-day lockout)` : ""}${o.volSize ? "; positions scaled by volatility" : ""}; ${s.slipBps} bps slippage; ${s.years} years.`;
   }
   const strat = s.strategy === "meanrev"
     ? `buy dips (2-day RSI under ${s.rsiBuy}, sell above the ${s.exitSma}-day average, ${Number(s.hold) > 0 ? `${s.hold}-day limit` : "no time limit"})`
@@ -578,6 +582,7 @@ async function run(only = null) {
   const rotRun = s.strategy === "momentum";
   if (!only || sw.isRot !== rotRun) { sw.rows.clear(); sw.dailyPnl = {}; sw.rot = { dates: null, spy: null, closes: new Map() }; tradeChart.reset(); mixChart.reset(); }
   sw.isRot = rotRun;
+  sw.runStocks = sw.stocks;
   $("sw-rob-wrap").hidden = true; $("sw-rob-note").textContent = "";
   sw.bench = null; sw.benchErr = false; sw.vs = null;
   const benchP = rotRun ? Promise.resolve() : fetch(`/api/swing?bench=1&years=${encodeURIComponent(s.years)}`).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || r.status); sw.bench = d.bench; })).catch(() => { sw.benchErr = true; });
@@ -660,17 +665,25 @@ function csv() {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
+const LIST_NAMES = { sp500: "S&P 500 stocks", sp400: "S&P 400 mid-size stocks", etfs: "ETFs" };
+const listKey = () => (LIST_NAMES[$("s-universe").value] ? $("s-universe").value : "sp500");
 async function loadStocks() {
+  const key = listKey();
+  sw.stocks = [];
+  $("sw-run").disabled = true;
+  $("sw-status").textContent = `Loading the ${LIST_NAMES[key]} list...`;
   try {
-    const r = await fetch("/api/daytrade-symbols");
+    const r = await fetch(key === "sp500" ? "/api/daytrade-symbols" : `/api/daytrade-symbols?list=${key}`);
     const data = await r.json();
-    sw.stocks = (data.options || []).filter((o) => o.tag !== "ETF" && o.tag !== "Crypto").map((o) => ({ symbol: o.symbol, sector: o.tag || "", added: o.added || "" }));
+    if (key === listKey()) sw.stocks = (data.options || []).filter((o) => o.tag !== "ETF" && o.tag !== "Crypto").map((o) => ({ symbol: o.symbol, sector: o.tag || "", added: o.added || "" }));
+    else return;                                                    // the choice changed while this was loading; the newer load wins
   } catch { /* the symbols box still works */ }
   $("sw-run").disabled = false;
-  $("sw-status").textContent = sw.stocks.length ? `Ready: ${sw.stocks.length} S&P 500 stocks.` : "The S&P 500 list did not load. Type some symbols above to test those instead.";
+  $("sw-status").textContent = sw.stocks.length ? `Ready: ${sw.stocks.length} ${LIST_NAMES[key]}.` : `The ${LIST_NAMES[key]} list did not load. Type some symbols above to test those instead.`;
 }
 
 $("s-strategy").addEventListener("change", showStrategy);
+$("s-universe").addEventListener("change", loadStocks);
 const showPark = () => { $("sw-parkrate-wrap").hidden = $("s-park").value !== "rate"; };
 // The balance and what idle money does are only used on this page, so changing them updates the results without a new run.
 const draw = (final) => (sw.isRot ? renderRotation(final) : render(final));

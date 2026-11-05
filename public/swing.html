@@ -219,8 +219,16 @@
           <span class="help dt-ex" id="h-borrow">What it costs to borrow shares to short, as a yearly percentage of the position, charged for every calendar day a short is open. Big, popular stocks are often under 1%; heavily shorted ones can cost 10% or far more, and the broker can force you to close without notice. Robinhood's fee varies by stock and day.</span>
         </label>
       </div>
+      <label class="wide">Stock list
+        <select id="s-universe" aria-describedby="h-universe">
+          <option value="sp500">S&amp;P 500 stocks</option>
+          <option value="sp400">S&amp;P 400 mid-size stocks</option>
+          <option value="etfs">Sector, country and bond ETFs</option>
+        </select>
+        <span class="help dt-ex" id="h-universe">What gets tested when the box below is blank. Every comparison on this page stays against the S&amp;P 500 (SPY), whichever list you pick. Mid-size stocks are less followed, so rankings can work better there, but they swing more and cost more to trade (raise the slippage). The ETF list has no stock-picking hindsight, because funds are not added to an index after a rally, so it is the fairest test of the ranking idea; the join-date setting does not apply to it. S&amp;P 400 membership dates are not in the list, so the same hindsight caveat as the S&amp;P 500 applies there, without the join-date fix.</span>
+      </label>
       <label class="wide">Only these symbols (optional)
-        <input id="s-symbols" type="text" placeholder="Leave blank for the whole S&amp;P 500, or type e.g. AAPL, MSFT, SPY" aria-describedby="h-symbols" />
+        <input id="s-symbols" type="text" placeholder="Leave blank for the whole stock list above, or type e.g. AAPL, MSFT, SPY" aria-describedby="h-symbols" />
         <span class="help dt-ex" id="h-symbols">Comma-separated tickers. Handy for a quick test before a full scan. SPY works too, though ETFs have no sector.</span>
       </label>
     </form>
