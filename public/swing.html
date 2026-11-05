@@ -264,6 +264,15 @@
         <div id="sw-rot" hidden>
           <h3>The rotation</h3>
           <div class="dt-tiles" id="sw-rot-tiles"></div>
+          <div class="dt-chart-card dt-balcard dt-distcard" id="sw-distcard" hidden>
+            <div class="dt-chart-title">Every position, worst to best <span class="hint">(what sits behind the average and the median)</span></div>
+            <p class="hint ds-summary"></p>
+            <div class="ds-svg"></div>
+            <p class="dt-ballegend ds-legend"></p>
+            <p class="hint dt-baldetail ds-detail" aria-live="polite"></p>
+          </div>
+          <p class="hint dt-ex">One bar per position, sorted from the biggest loss on the left to the biggest win on the right. Red bars hang below the zero line by the percentage lost; green bars rise above it by the percentage gained, all on one scale. The dashed lines are the median (the middle position) and the average. If the average sits well above the median, a few big winners are carrying the result; if the red side is as deep as the green side is tall, the wins are not outrunning the losses by much. With a very large number of positions, neighbours are averaged into one bar. Percentages are per position after slippage, not dollars, so a position held in the account is sized by your settings.</p>
+
           <h4>What it would hold today</h4>
           <p class="hint" id="sw-rot-note"></p>
           <div class="table-wrap">

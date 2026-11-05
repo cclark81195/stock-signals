@@ -218,3 +218,21 @@ body.dt-explain .dt-ex { display: block; }
 #sw-results.rotation .r-only { display: none !important; }
 
 #sw-rob tr.dt-cur td { font-weight: 600; background: var(--grid); }
+
+/* Every position, worst to best (Swing Lab leaderboard) */
+.ds-svg svg { display: block; width: 100%; height: auto; }
+.ds-svg .grid { stroke: var(--text); opacity: 0.55; }
+.ds-svg .lbl { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ds-svg .ds-bar { cursor: pointer; }
+.ds-svg .ds-bar .ds-hit { fill: transparent; stroke: none; }
+.ds-svg .ds-bar:hover .ds-hit { fill: var(--grid); opacity: 0.5; }
+.ds-svg .ds-bar.sel .ds-hit, .ds-svg .ds-bar:focus-visible .ds-hit { fill: none; stroke: var(--text); stroke-width: 1.5; }
+.ds-svg .ds-bar:focus { outline: none; }
+.ds-loss { fill: var(--sell); background: var(--sell); }
+.ds-win { fill: var(--buy); background: var(--buy); }
+.ds-svg line.ds-med, .ds-svg line.ds-avg { stroke-width: 1.5; stroke-dasharray: 6 4; pointer-events: none; }
+.ds-svg line.ds-med { stroke: var(--text); }
+.ds-svg line.ds-avg { stroke: var(--series-ma50, #2f6fdb); }
+.ds-svg .ds-med-t { fill: var(--text); font-weight: 600; }
+.ds-svg .ds-avg-t { fill: var(--series-ma50, #2f6fdb); font-weight: 600; }
+.dt-ballegend .lg.ln.ds-medk { background: var(--text); }
