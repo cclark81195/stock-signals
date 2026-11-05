@@ -176,3 +176,43 @@ test("current picks respect the sector cap too", () => {
   const rot = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 2, sectors, sectorCap: 1 });
   assert.deepEqual(rot.picks.map((p) => p.symbol), ["T1", "H1"]);
 });
+
+// ---- trailing stop and volatility-scaled sizes ----
+const crash = dates.map((_, i) => (i < 400 ? 100 * Math.pow(1.004, i) : 100 * Math.pow(1.004, 400) * Math.pow(0.97, i - 400)));
+
+test("trailing stop: sells at the next close after the close that broke the stop, then stays out 21 days", () => {
+  const closes = new Map([["A", crash], ["B", grow(0.0005)]]);
+  const on = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 1, trailStop: 20 });
+  const t = on.trades.find((x) => x.symbol === "A");
+  assert.equal(t.exitReason, "stop");
+  const xi = dates.indexOf(t.exitDate);
+  assert.equal(t.exit, crash[xi]);
+  const peak = Math.max(...crash.slice(0, xi - 1));
+  assert.ok(crash[xi - 1] <= peak * 0.8, "triggered by the previous close");
+  assert.ok(crash[xi - 2] > peak * 0.8, "and not earlier");
+  assert.ok(!on.trades.some((x) => x.symbol === "A" && dates.indexOf(x.date) > xi && dates.indexOf(x.date) < xi + 21));
+  const off = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 1 });
+  assert.ok(off.trades.every((x) => x.exitReason !== "stop"), "off by default");
+});
+
+test("volatility sizing: a wilder stock gets a smaller weight, clamped; absent when off", () => {
+  const wild = dates.map((_, i) => 100 * Math.pow(1.004, i) * (1 + (i % 2 ? 0.06 : -0.06)));
+  const calm = (r) => dates.map((_, i) => 100 * Math.pow(1 + r, i) * (1 + (i % 2 ? 0.005 : -0.005)));
+  const closes = new Map([["W", wild], ["C1", calm(0.003)], ["C2", calm(0.0029)], ["C3", calm(0.0028)]]);
+  const on = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 4, volSize: true });
+  const w = on.trades.find((x) => x.symbol === "W"), c = on.trades.find((x) => x.symbol === "C1");
+  assert.ok(w && c);
+  assert.ok(w.w < c.w && w.w >= 0.25 && c.w <= 1.5);
+  const off = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 4 });
+  assert.ok(off.trades.every((x) => x.w === undefined));
+});
+
+test("account sizing honours a trade's size multiplier w", () => {
+  const closes = new Map([["A", grow(0.002)], ["B", grow(0.0015)]]);
+  const rot = buildRotation(dates, closes, grow(0.001), { ...opts, topN: 2 });
+  rot.trades.forEach((t) => { if (t.symbol === "A") t.w = 0.5; });
+  const days = dates.slice(dates.indexOf(rot.testStart) - 1);
+  const rep = replayPark(rotationRows(rot), 10000, 100, days, days.map(() => 1), { pct: 50, base: BASE });
+  const a = rep.takenList.find((t) => t.symbol === "A"), b = rep.takenList.find((t) => t.symbol === "B");
+  assert.ok(Math.abs(a.size - 2500) < 1e-6 && Math.abs(b.size - 5000 * 1) < 1e-6 || a.size < b.size);
+});

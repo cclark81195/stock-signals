@@ -45,13 +45,32 @@ function dipSeries(series) {
   return { z, avg };
 }
 
+/** 60-day volatility of daily returns, known at the close of each day. */
+function volSeries(series, n = 60) {
+  const out = new Array(series.length).fill(null);
+  const ret = series.map((v, i) => (i && v > 0 && series[i - 1] > 0 ? v / series[i - 1] - 1 : null));
+  for (let i = n; i < series.length; i++) {
+    let sum = 0, ok = true;
+    for (let k = i - n + 1; k <= i; k++) { if (ret[k] == null) { ok = false; break; } sum += ret[k]; }
+    if (!ok) continue;
+    const m = sum / n; let sq = 0;
+    for (let k = i - n + 1; k <= i; k++) sq += (ret[k] - m) ** 2;
+    out[i] = Math.sqrt(sq / n);
+  }
+  return out;
+}
+const median = (a) => { const b = [...a].sort((x, y) => x - y); return b.length ? b[Math.floor(b.length / 2)] : null; };
+
 /**
  * dates: the shared trading calendar; closes: Map symbol -> closes aligned to dates (null before a stock existed);
  * spy: SPY's closes aligned to dates.
  * opts: score "momentum"|"dip", every "month"|"week"|"day", topN, buffer (a holding is kept until it ranks below topN + buffer),
  *       minScore (a stock must score above this to be bought), lookback/skip (days, momentum), slipBps, spyFilter,
  *       joined (Map symbol -> "YYYY-MM-DD": a stock is only ranked once it was in the index), sectors (Map symbol -> sector) with
- *       sectorCap (at most this many holdings from one sector; 0 = no limit).
+ *       sectorCap (at most this many holdings from one sector; 0 = no limit),
+ *       trailStop (percent: sell a holding whose close falls this far below its highest close since it was bought; 0 = off; the
+ *       decision uses that day's close and the sale fills at the NEXT close, and the stock is locked out for 21 days),
+ *       volSize (true: a stock's position is scaled by median volatility / its own volatility, between 0.25x and 1.5x).
  * Returns { trades, bySymbol, rebalances, testStart, picks, filterOff, universe }.
  */
 export function buildRotation(dates, closes, spy, opts = {}) {
@@ -64,6 +83,9 @@ export function buildRotation(dates, closes, spy, opts = {}) {
   const marketOn = (s) => !o.spyFilter || (spySma[s] != null && spy[s] > spySma[s]);
   const dip = new Map();
   if (o.score === "dip") for (const sym of syms) dip.set(sym, dipSeries(closes.get(sym)));
+  const vols = new Map();
+  if (o.volSize) for (const sym of syms) vols.set(sym, volSeries(closes.get(sym)));
+  const lock = new Map();                                              // symbol -> day index until which it may not be bought again
   const held = new Map();
   const trades = [];
   let rebalances = 0, firstIdx = null;
@@ -75,7 +97,7 @@ export function buildRotation(dates, closes, spy, opts = {}) {
     trades.push({
       symbol: sym, side: "long", date: dates[p.i], exitDate: dates[i], entry: p.px, exit: out, shares: BASE / p.px,
       holdBars: i - p.i, exitReason: reason, pnl: BASE * (out / p.px - 1), retPct: (out / p.px - 1) * 100,
-      exitTime: Date.parse(dates[i]) / 1000, base: BASE,
+      exitTime: Date.parse(dates[i]) / 1000, base: BASE, ...(p.w != null ? { w: p.w } : {}),
     });
     held.delete(sym);
   };
@@ -100,8 +122,15 @@ export function buildRotation(dates, closes, spy, opts = {}) {
 
   const first = Math.max(o.lookback + 1, 253);
   for (let i = first; i < L; i++) {
+    const s = i - 1;                                                  // every decision uses yesterday's close
+    if (o.trailStop > 0) {
+      for (const [sym, p] of [...held]) {
+        const c = closes.get(sym)[s];
+        if (c > p.peak) p.peak = c;
+        if (c > 0 && c <= p.peak * (1 - o.trailStop / 100)) { sell(sym, i, "stop"); lock.set(sym, i + 21); }
+      }
+    }
     if (!isRebalanceDay(dates, i, o.every)) continue;
-    const s = i - 1;                                                  // the ranking uses yesterday's close
     rebalances++;
     const on = marketOn(s);
     const board = on ? leaderboard(s, i) : [];
@@ -114,16 +143,23 @@ export function buildRotation(dates, closes, spy, opts = {}) {
       const keeps = rank.has(sym) && rank.get(sym) < o.topN + o.buffer && (o.score === "dip" || score.get(sym) > o.minScore);
       if (!keeps) sell(sym, i, "dropped");
     }
-    let slots = o.topN - held.size;
+    let slots = o.topN - held.size, ref0 = null;
     const perSector = new Map();
     const secOf = (sym) => (o.sectors && o.sectors.get(sym)) || "";
     if (o.sectorCap > 0) for (const sym of held.keys()) perSector.set(secOf(sym), (perSector.get(secOf(sym)) || 0) + 1);
     for (const [sym] of buyable(board)) {
       if (slots <= 0) break;
       if (held.has(sym)) continue;
+      if ((lock.get(sym) || 0) > i) continue;                         // stopped out recently: stay out for a while
       if (o.sectorCap > 0 && secOf(sym) && (perSector.get(secOf(sym)) || 0) >= o.sectorCap) continue;   // that sector is full: take the next best
       if (o.sectorCap > 0) perSector.set(secOf(sym), (perSector.get(secOf(sym)) || 0) + 1);
-      held.set(sym, { i, px: closes.get(sym)[i] * (1 + slip) });
+      let w;
+      if (o.volSize) {
+        const ref = ref0 ?? (ref0 = median(board.map(([b]) => vols.get(b)[s]).filter((v) => v > 0)));
+        const v = vols.get(sym)[s];
+        w = ref > 0 && v > 0 ? Math.min(1.5, Math.max(0.25, ref / v)) : 1;
+      }
+      held.set(sym, { i, px: closes.get(sym)[i] * (1 + slip), peak: closes.get(sym)[i], w });
       if (firstIdx == null) firstIdx = i;
       slots--;
     }

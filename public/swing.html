@@ -145,6 +145,13 @@
           <input id="s-mobuf" type="number" min="0" max="50" step="1" value="0" inputmode="numeric" aria-describedby="h-mobuf" />
           <span class="help dt-ex" id="h-mobuf">Extra places a holding may slip before it is sold. 0 swaps a stock the moment it is outside the top group; 5 keeps it until it is outside the top group plus five places. Higher means fewer trades and less cost.</span>
         </label>
+        <label>Trailing stop, % below the highest close (0 = off)
+          <input id="s-mostop" type="number" min="0" max="90" step="1" value="0" inputmode="numeric" aria-describedby="h-mostop" />
+          <span class="help dt-ex" id="h-mostop">Sells a holding once its close is this far below the highest close since it was bought. The decision is made on that day's close and the sale happens at the next close, so a fast drop can still cost more than the number you type. The stock is not bought again for 21 trading days. 0 turns it off. Try 20 to see how much of the big drops it removes and how much return it costs.</span>
+        </label>
+        <label class="check"><input id="s-movol" type="checkbox" aria-describedby="h-movol" /> Smaller positions in wilder stocks
+          <span class="help dt-ex" id="h-movol">Each position is sized by the typical 60-day swing of the stocks on the board divided by its own swing, kept between one quarter and one and a half times the normal size. A stock that moves twice as much as typical gets half the money. Cash left over stays in your idle-cash setting.</span>
+        </label>
       </div>
       <div class="dt-setups cols3" id="sw-mr">
         <label>Buy when 2-day RSI is below
