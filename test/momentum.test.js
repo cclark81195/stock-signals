@@ -242,3 +242,8 @@ test("most-traded filter: only the N biggest by 60-day dollar volume that day ca
   const w = f.trades.find((t) => t.symbol === "WIN");
   assert.ok(w && w.exitReason === "dropped");
 });
+
+test("median of position returns: odd and even counts, unaffected by one huge winner", () => {
+  const med = (a) => { const r = [...a].sort((x, y) => x - y), n = r.length; return n % 2 ? r[(n - 1) / 2] : (r[n / 2 - 1] + r[n / 2]) / 2; };
+  assert.equal(med([5, 1, 3]), 3); assert.equal(med([1, 2, 3, 10]), 2.5); assert.equal(med([-2, 0, 1, 400]), 0.5);
+});

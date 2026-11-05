@@ -458,6 +458,8 @@ function ingestPrices(data) {
 function renderRotTiles(rot, rows, o, takenList) {
   const n = rot.trades.length, wins = rot.trades.filter((t) => t.pnl > 0).length;
   const avgRet = n ? rot.trades.reduce((s, t) => s + t.retPct, 0) / n : null;
+  const rets = rot.trades.map((t) => t.retPct).sort((x, y) => x - y);
+  const medRet = n ? (n % 2 ? rets[(n - 1) / 2] : (rets[n / 2 - 1] + rets[n / 2]) / 2) : null;
   const avgHold = n ? rot.trades.reduce((s, t) => s + t.holdBars, 0) / n : null;
   const years = rot.testStart && sw.rot.dates ? (sw.rot.dates.length - sw.rot.dates.indexOf(rot.testStart)) / 252 : 0;
   const tiles = [
@@ -466,6 +468,7 @@ function renderRotTiles(rot, rows, o, takenList) {
     tile("Trades", n.toLocaleString("en-US"), years ? `about ${(n / years).toFixed(0)} a year` : "", "", "Positions opened and closed. A stock that stays on the leaderboard is kept without trading, so this is much lower than the number of checks times the number of stocks."),
     tile("Win rate", n ? pct0(wins / n) : "-", "", "", "Share of positions that made money after slippage."),
     tile("Average trade", avgRet == null ? "-" : `${sgn(avgRet)}%`, "per position, after slippage", cls(avgRet), "Average percentage gain or loss of one position from buy to sell."),
+    tile("Median trade", medRet == null ? "-" : `${sgn(medRet)}%`, "the middle position", cls(medRet), "The middle result when every position is sorted from worst to best: half did better, half did worse. If the average is far above the median, a few big winners are carrying the result and a typical trade does much less."),
     tile("Average hold", avgHold == null ? "-" : `${avgHold.toFixed(0)} days`, "", "", "How long a position was kept on average (trading days)."),
   ];
   const nJoin = o.joined ? o.joined.size : 0, nExit = o.removed ? o.removed.size : 0;
