@@ -5,11 +5,12 @@
 import { getConstituents } from "../lib/constituents.js";
 import { CRYPTO, ETFS } from "../lib/daytrade/markets.js";
 import { ETF_UNIVERSE } from "../lib/etf-universe.js";
+import { getRussell, RUSSELL_KEYS } from "../lib/russell.js";
 
-// ?list=sp400 or ?list=etfs : just that stock list for the Swing Lab (no SPY or crypto rows). Same shape: { options, loaded, stockCount }.
+// ?list=sp400|sp600|nasdaq100|russell1000|russell3000|etfs : just that stock list for the Swing Lab (no SPY or crypto rows). Same shape: { options, loaded, stockCount }.
 async function otherList(list, res) {
   let members = null;
-  try { members = list === "etfs" ? ETF_UNIVERSE : (await getConstituents("sp400")).members; } catch { /* reported as not loaded */ }
+  try { members = list === "etfs" ? ETF_UNIVERSE : RUSSELL_KEYS.includes(list) ? (await getRussell(list)).members : (await getConstituents(list)).members; } catch { /* reported as not loaded */ }
   const options = (members || []).map((m) => ({ symbol: m.symbol, name: m.company || m.symbol, tag: m.sector || "Other" }));
   res.setHeader("Cache-Control", members ? "public, s-maxage=86400, stale-while-revalidate=86400" : "public, s-maxage=300");
   res.status(200).json({ options, loaded: !!members, stockCount: options.length });
@@ -17,7 +18,7 @@ async function otherList(list, res) {
 
 export default async function handler(req, res) {
   const list = String((req.query || {}).list || "");
-  if (list === "sp400" || list === "etfs") return otherList(list, res);
+  if (["sp400", "sp600", "nasdaq100", "russell1000", "russell3000", "etfs"].includes(list)) return otherList(list, res);
   const options = [
     ...ETFS.map((e) => ({ ...e, tag: "ETF" })),
     ...CRYPTO.map((c) => ({ ...c, tag: "Crypto" })),

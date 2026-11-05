@@ -463,3 +463,12 @@ test("symbols api: ?list=etfs returns the ETF list without SPY or crypto rows", 
   assert.equal(out.b.loaded, true);
   assert.ok(out.b.options.length >= 40 && out.b.options.every((o) => o.tag && o.tag !== "Crypto" && o.symbol !== "SPY"));
 });
+
+test("iShares holdings file: skips header lines, cash and futures, cleans tickers, drops duplicates", async () => {
+  const { parseIsharesHoldings } = await import("../lib/russell.js");
+  const csv = `iShares Russell 1000 ETF\nFund Holdings as of,"Nov 03, 2026"\n\n﻿` + `Ticker,Name,Sector,Asset Class,Market Value,Weight (%)\n"AAPL","APPLE INC","Information Technology","Equity","1","6.0"\n"BRKB","BERKSHIRE","Financials","Equity","1","1.0"\n"BRK.B","BERKSHIRE B","Financials","Equity","1","1.0"\n"AAPL","DUP","Information Technology","Equity","1","1"\n"USD","USD CASH","Cash and/or Derivatives","Cash","1","0.1"\n"ESZ6","FUTURE","Cash and/or Derivatives","Futures","1","0"\n"-","LINE","-","Equity","1","0"\n"XYZ","NO SECTOR","-","Equity","1","0.1"\n`;
+  const r = parseIsharesHoldings(csv);
+  assert.deepEqual(r.map((x) => x.symbol), ["AAPL", "BRK-B", "BRKB", "XYZ"]);
+  assert.equal(r.find((x) => x.symbol === "XYZ").sector, "Other");
+  assert.throws(() => parseIsharesHoldings("nothing useful"));
+});

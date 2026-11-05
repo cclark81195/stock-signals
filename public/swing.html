@@ -222,10 +222,15 @@
       <label class="wide">Stock list
         <select id="s-universe" aria-describedby="h-universe">
           <option value="sp500">S&amp;P 500 stocks</option>
+          <option value="nasdaq100">Nasdaq-100 stocks</option>
           <option value="sp400">S&amp;P 400 mid-size stocks</option>
+          <option value="sp600">S&amp;P 600 small stocks</option>
+          <option value="russell1000">Russell 1000 stocks</option>
+          <option value="russell3000">Russell 3000 stocks (slow)</option>
           <option value="etfs">Sector, country and bond ETFs</option>
         </select>
-        <span class="help dt-ex" id="h-universe">What gets tested when the box below is blank. Every comparison on this page stays against the S&amp;P 500 (SPY), whichever list you pick. Mid-size stocks are less followed, so rankings can work better there, but they swing more and cost more to trade (raise the slippage). The ETF list has no stock-picking hindsight, because funds are not added to an index after a rally, so it is the fairest test of the ranking idea; the join-date setting does not apply to it. S&amp;P 400 membership dates are not in the list, so the same hindsight caveat as the S&amp;P 500 applies there, without the join-date fix.</span>
+        <span class="hint" id="s-universe-desc" aria-live="polite"></span>
+        <span class="help dt-ex" id="h-universe">What gets tested when the box below is blank. Every comparison on this page stays against the S&amp;P 500 (SPY), whichever list you pick. All lists except the ETFs are today's members, so they carry some hindsight (companies that dropped out are missing); only the S&amp;P 500 list has join dates to correct for part of that. Bigger lists take longer to download: the Russell 3000 is about six times the S&amp;P 500. Smaller companies cost more to trade, so raise the slippage for them.</span>
       </label>
       <label class="wide">Only these symbols (optional)
         <input id="s-symbols" type="text" placeholder="Leave blank for the whole stock list above, or type e.g. AAPL, MSFT, SPY" aria-describedby="h-symbols" />

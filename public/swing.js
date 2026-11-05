@@ -665,11 +665,21 @@ function csv() {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
-const LIST_NAMES = { sp500: "S&P 500 stocks", sp400: "S&P 400 mid-size stocks", etfs: "ETFs" };
+const LIST_NAMES = { sp500: "S&P 500 stocks", nasdaq100: "Nasdaq-100 stocks", sp400: "S&P 400 mid-size stocks", sp600: "S&P 600 small stocks", russell1000: "Russell 1000 stocks", russell3000: "Russell 3000 stocks", etfs: "ETFs" };
+const LIST_INFO = {
+  sp500: "The 500 large US companies in the S&P 500. The default, and the list SPY tracks, so a win here is a win against your own baseline. Has join dates.",
+  nasdaq100: "The 100 biggest non-financial Nasdaq companies. Heavy in tech, so expect bigger gains and bigger drops than the S&P 500.",
+  sp400: "About 400 mid-size US companies. Less followed than the giants, so rankings may work better, but they swing more and cost more to trade.",
+  sp600: "About 600 small US companies. The least followed and most volatile of the S&P lists; use a higher slippage setting.",
+  russell1000: "About 1,000 of the largest US companies: roughly the S&P 500 plus the next 500. A wider net than the S&P 500, taken from today's fund holdings.",
+  russell3000: "About 3,000 US stocks, large to small, about 98% of the US market. Very wide and slow: the download takes many minutes. Taken from today's fund holdings.",
+  etfs: "About 50 sector, industry, country, bond and commodity funds. Funds are not added after a rally, so this is the fairest test of the ranking idea.",
+};
 const listKey = () => (LIST_NAMES[$("s-universe").value] ? $("s-universe").value : "sp500");
 async function loadStocks() {
   const key = listKey();
   sw.stocks = [];
+  $("s-universe-desc").textContent = LIST_INFO[key];
   $("sw-run").disabled = true;
   $("sw-status").textContent = `Loading the ${LIST_NAMES[key]} list...`;
   try {
