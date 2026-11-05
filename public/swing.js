@@ -2,6 +2,7 @@
 import { replayAccount, replayPark, maxDrawdown } from "./swing-account.js";
 import { buildRotation, rotationRows, align } from "./swing-momentum.js";
 import { makeTradeChart } from "./swing-chart.js";
+import { makeDistChart } from "./swing-dist.js";
 import { makeMixChart } from "./swing-mix.js";
 
 const $ = (id) => document.getElementById(id);
@@ -401,6 +402,7 @@ function renderTradeChart(rows, all, final, acct) {
 }
 
 const mixChart = makeMixChart($("sw-mixcard"), { esc, money });
+const distChart = makeDistChart($("sw-distcard"), { esc, sgn });
 function renderMix(acct) {
   if (!acct || !acct.rep.takenList.length) { mixChart.render(null); return; }
   const r = acct.rep;
@@ -518,6 +520,7 @@ function renderRotation(final = false) {
   const acct = buildAccount(rows);
   if (final) renderVs(rows, acct);
   renderRotTiles(rot, rows, o, acct ? acct.rep.takenList : rot.trades);
+  distChart.render(rot.trades.map((t) => ({ r: t.retPct, sym: t.symbol, date: t.date, exit: t.exitDate })));
   renderPicks(rot, o);
   renderRotYears(acct ? acct.rep.takenList : rot.trades);
   renderTradeChart(rows, rot.trades, final, acct);
