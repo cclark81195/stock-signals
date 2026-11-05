@@ -183,4 +183,34 @@ body.dt-explain .dt-ex { display: block; }
 .dt-setups[hidden] { display: none; }
 .dt-ballegend .lg.ln { width: 14px; height: 3px; border: 0; background: var(--series-price); vertical-align: 3px; border-radius: 2px; }
 .dt-ballegend .lg.ln.sp { background: var(--series-ma50); }
+.dt-ballegend .lg.ln.tot { background: var(--text); }
 .bal-svg .spy { fill: none; stroke: var(--series-ma50); stroke-width: 1.6; stroke-linejoin: round; opacity: 0.9; }
+
+/* Holdings (stacked bar) chart */
+.dt-mixcard { margin-top: 16px; }
+.mx-svg svg { display: block; width: 100%; height: auto; }
+.mx-svg .grid { stroke: var(--grid); }
+.mx-svg .lbl { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mx-svg .mx-bar { cursor: pointer; }
+.mx-svg .mx-bar rect { stroke: var(--surface); stroke-width: 0.5; }
+.mx-svg .mx-bar .mx-hit { fill: transparent; stroke: none; }
+.mx-svg .mx-bar:hover .mx-hit { fill: var(--grid); opacity: 0.5; }
+.mx-svg .mx-bar.sel .mx-hit, .mx-svg .mx-bar:focus-visible .mx-hit { fill: none; stroke: var(--text); stroke-width: 1.5; }
+.mx-svg .mx-bar:focus { outline: none; }
+.mx-svg .mx-total { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linejoin: round; pointer-events: none; }
+.mx-svg .mx-spyline { fill: none; stroke: var(--series-ma50); stroke-width: 1.6; stroke-dasharray: 5 3; stroke-linejoin: round; pointer-events: none; }
+.mx-park { fill: var(--series-price); background: var(--series-price); }
+.mx-s0 { fill: #eb6834; background: #eb6834; }
+.mx-s1 { fill: #1baf7a; background: #1baf7a; }
+.mx-s2 { fill: #8a5cc7; background: #8a5cc7; }
+.mx-s3 { fill: #d1478a; background: #d1478a; }
+.mx-s4 { fill: #c99a1b; background: #c99a1b; }
+.mx-other { fill: #8f8e87; background: #8f8e87; }
+@media (prefers-color-scheme: dark) {
+  .mx-s0 { fill: #f08a5c; background: #f08a5c; }
+  .mx-s1 { fill: #3bc597; background: #3bc597; }
+  .mx-s2 { fill: #a98be0; background: #a98be0; }
+  .mx-s3 { fill: #e472a8; background: #e472a8; }
+  .mx-s4 { fill: #e0b83f; background: #e0b83f; }
+}
+.dt-ballegend .sw { display: inline-block; width: 11px; height: 11px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; }
