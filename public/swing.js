@@ -4,6 +4,7 @@ import { buildRotation, rotationRows, align } from "./swing-momentum.js";
 import { makeTradeChart } from "./swing-chart.js";
 import { makeDistChart } from "./swing-dist.js";
 import { makeMixChart } from "./swing-mix.js";
+import { makeScan } from "./swing-scan.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -402,6 +403,7 @@ function renderTradeChart(rows, all, final, acct) {
 }
 
 const mixChart = makeMixChart($("sw-mixcard"), { esc, money });
+const scan = makeScan($("sw-scan"), { esc, sgn, pct0 });
 const distChart = makeDistChart($("sw-distcard"), { esc, sgn });
 function renderMix(acct) {
   if (!acct || !acct.rep.takenList.length) { mixChart.render(null); return; }
@@ -600,6 +602,8 @@ async function run(only = null) {
   if (!only || sw.isRot !== rotRun) { sw.rows.clear(); sw.dailyPnl = {}; sw.rot = { dates: null, spy: null, closes: new Map(), dvol: new Map() }; tradeChart.reset(); mixChart.reset(); }
   sw.isRot = rotRun;
   sw.runStocks = sw.stocks;
+  $("sw-scan").hidden = true;
+  if (!rotRun) { if (!only) scan.reset(symbols.length); else $("sw-scan").hidden = false; }
   $("sw-rob-wrap").hidden = true; $("sw-rob-note").textContent = "";
   sw.bench = null; sw.benchErr = false; sw.vs = null;
   const benchP = rotRun ? Promise.resolve() : fetch(`/api/swing?bench=1&years=${encodeURIComponent(s.years)}`).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || r.status); sw.bench = d.bench; })).catch(() => { sw.benchErr = true; });
@@ -636,7 +640,9 @@ async function run(only = null) {
           if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
           (data.warnings || []).forEach((w) => warnings.add(w));
           for (const [dt, v] of Object.entries(data.dailyPnl || {})) sw.dailyPnl[dt] = (sw.dailyPnl[dt] || 0) + v;
-          for (const row of data.symbols || []) { if (row.error || !row.all) sw.failed.push(row.symbol); else sw.rows.set(row.symbol, row); }
+          const fresh = [];
+          for (const row of data.symbols || []) { if (row.error || !row.all) sw.failed.push(row.symbol); else { sw.rows.set(row.symbol, row); fresh.push({ ...rowView(row), tradeList: row.trades || [] }); } }
+          scan.add(fresh);
         }
       } catch (e) {
         lastErr = e.message || String(e);
@@ -653,6 +659,7 @@ async function run(only = null) {
   sw.running = false;
   $("sw-cancel").hidden = true; $("sw-run").disabled = false; $("sw-progress").hidden = true;
   if (stopped) sw.failed.push(...queue.flat());
+  if (!rotRun) scan.finish(stopped);
   draw(true);
   $("sw-updated").textContent = `Last run ${new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
   const nDone = sw.isRot ? sw.rot.closes.size : sw.rows.size;

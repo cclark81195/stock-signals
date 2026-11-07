@@ -1,0 +1,16 @@
+/* Swing Lab live scan sphere. The stage is always dark so the sphere keeps its look in light and dark page themes. */
+.scan { margin: 14px 0; display: grid; gap: 10px; max-width: 560px; }
+.scan[hidden] { display: none; }
+.scan-stage {
+  position: relative; width: 100%; aspect-ratio: 1 / 1; border-radius: var(--radius, 14px); overflow: hidden;
+  border: 1px solid #1b2547; background: radial-gradient(circle at 50% 50%, #0f1838 0%, #0a1022 58%, #060914 100%);
+}
+.scan-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; cursor: crosshair; -webkit-tap-highlight-color: transparent; }
+.scan-read { min-height: 3em; font-size: 0.95rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.scan-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.scan-lbl { font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+.scan-modes button { appearance: none; border: 1px solid var(--border); background: none; color: var(--text-2); font: inherit; font-size: 0.8rem; padding: 7px 11px; border-radius: 999px; cursor: pointer; }
+.scan-modes button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.scan-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.78rem; color: var(--muted); }
+.scan-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.scan-legend .sq { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
