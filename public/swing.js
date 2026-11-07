@@ -641,7 +641,7 @@ async function run(only = null) {
           (data.warnings || []).forEach((w) => warnings.add(w));
           for (const [dt, v] of Object.entries(data.dailyPnl || {})) sw.dailyPnl[dt] = (sw.dailyPnl[dt] || 0) + v;
           const fresh = [];
-          for (const row of data.symbols || []) { if (row.error || !row.all) sw.failed.push(row.symbol); else { sw.rows.set(row.symbol, row); fresh.push(rowView(row)); } }
+          for (const row of data.symbols || []) { if (row.error || !row.all) sw.failed.push(row.symbol); else { sw.rows.set(row.symbol, row); fresh.push({ ...rowView(row), tradeList: row.trades || [] }); } }
           scan.add(fresh);
         }
       } catch (e) {
