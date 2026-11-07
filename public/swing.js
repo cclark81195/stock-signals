@@ -5,6 +5,7 @@ import { makeTradeChart } from "./swing-chart.js";
 import { makeDistChart } from "./swing-dist.js";
 import { makeMixChart } from "./swing-mix.js";
 import { makeScan } from "./swing-scan.js";
+import { onFx, rollNumbers } from "./swing-fx.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -125,6 +126,7 @@ function renderTiles(rows, all, first, second) {
     tile("Older half", first.trades ? `${sgn(exp(first))}R` : "-", `${first.trades} trades, per trade`, cls(exp(first)), "Per-trade result using only the older half of the tested days."),
     tile("Newer half", second.trades ? `${sgn(exp(second))}R` : "-", `${second.trades} trades, per trade`, cls(exp(second)), "Per-trade result using only the newer half. If it disagrees with the older half, treat the result as noise."),
   ].join("");
+  rollNumbers($("sw-tiles"));
 }
 
 function renderDiag(rows, all) {
@@ -146,6 +148,7 @@ function renderDiag(rows, all) {
     tile("Time invested", `${(invested * 100).toFixed(1)}%`, "of days, per stock", "", "How often a stock was held, on average. A strategy that earns a little while invested only 5% of the time leaves 95% of your money free for something else."),
     tile("Buy & hold", `${sgn(d.holdPctSum / rows.length, 0)}%`, "average stock, whole download", "", "What simply buying each stock at the start and holding it would have returned, for comparison. Today's S&P 500 members only, so it is flattered by survivorship."),
   ].join("");
+  rollNumbers($("sw-diag"));
 
   const vsYears = new Map((sw.vs?.years || []).map((y) => [y.year, y]));
   const yearKeys = [...new Set([...Object.keys(d.byYear), ...vsYears.keys()])].sort();
@@ -309,6 +312,7 @@ function renderVs(rows, acct) {
     );
   }
   $("sw-vs-tiles").innerHTML = tiles.join("");
+  rollNumbers($("sw-vs-tiles"));
   const idle = v.mode === "spy" ? "idle money held in SPY (SPY is sold to fund each buy at that day's close and bought back when the trade is sold; dividends not counted)"
     : v.mode === "rate" ? `idle money earning ${(v.rate * 100).toFixed(1)}% a year` : "idle cash earning nothing";
   $("sw-vs-note").textContent = v.account
@@ -379,6 +383,7 @@ function renderTrades(trades) {
 }
 
 const tradeChart = makeTradeChart($("sw-balcard"), { esc, money, sgn, price, qty, exitNames: EXIT_NAMES });
+onFx((k) => { if (k === "ribbon") tradeChart.redraw(); if (k === "odo") rerender(); });
 
 /** The balance chart with a marker per buy and sell. Redrawn after every batch, so it grows as the scan runs. */
 function renderTradeChart(rows, all, final, acct) {
@@ -403,7 +408,7 @@ function renderTradeChart(rows, all, final, acct) {
 }
 
 const mixChart = makeMixChart($("sw-mixcard"), { esc, money });
-const scan = makeScan($("sw-scan"), { esc, sgn, pct0 });
+const scan = makeScan($("sw-scan"), { esc, sgn, pct0 }, { units: ["trades", "stocks"], effects: ["depth", "sectors", "hud", "odo", "ribbon"] });
 const distChart = makeDistChart($("sw-distcard"), { esc, sgn });
 function renderMix(acct) {
   if (!acct || !acct.rep.takenList.length) { mixChart.render(null); return; }

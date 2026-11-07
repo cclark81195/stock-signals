@@ -1,4 +1,6 @@
 // Day Trade Lab - front end (no build step, no dependencies)
+import { makeScan } from "./swing-scan.js";
+import { rollNumbers } from "./swing-fx.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -8,6 +10,7 @@ const qty = (n) => (n == null ? "-" : Number.isInteger(n) ? String(n) : n.toLoca
 const sgn = (x, d = 2) => (x == null ? "-" : `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(d)}`);
 const pct0 = (x) => (x == null ? "-" : `${Math.round(x * 100)}%`);
 const cls = (x) => (x == null || x === 0 ? "" : x > 0 ? "pos" : "neg");
+const scan = makeScan(document.getElementById("sp-scan"), { esc, sgn, pct0 }, { units: ["stocks"], effects: ["depth", "sectors", "hud", "odo"] });   // the scan returns totals per stock, not each trade, so one dot per stock here
 const SETUP_NAMES = { orb: "Opening-range breakout", vwap: "VWAP reclaim", flag: "Bull flag", triangle: "Ascending triangle", pullback: "Pullback to moving average", fib: "Fibonacci pullback", dbottom: "Double bottom", gap: "Gap and go" };
 const EXIT_NAMES = { target: "Target", stop: "Stop", "stop-gap": "Gap through stop", time: "End-of-day close", "session-end": "Session end" };
 
@@ -737,6 +740,7 @@ function spRender() {
     tile("Older half", first.trades ? `${sgn(spExp(first))}R` : "-", `${first.trades} trades, per trade`, cls(spExp(first)), "Per-trade result using only the older half of the tested days."),
     tile("Newer half", second.trades ? `${sgn(spExp(second))}R` : "-", `${second.trades} trades, per trade`, cls(spExp(second)), "Per-trade result using only the newer half. If it disagrees with the older half, treat the result as noise."),
   ].join("");
+  rollNumbers($("sp-tiles"));
 
   spRenderDiagnostics(rows, all);
 
@@ -846,6 +850,7 @@ async function spRun(only = null) {
   $("dt-sp").scrollIntoView({ behavior: "smooth", block: "start" });
   const symbols = only || sp.stocks.map((x) => x.symbol);
   if (!only) sp.rows.clear();
+  if (!only) scan.reset(symbols.length);
   sp.failed = [];
   sp.running = true; sp.cancel = false;
   sp.used = spSettingsNote(s);
@@ -873,9 +878,11 @@ async function spRun(only = null) {
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
         (data.warnings || []).forEach((w) => warnings.add(w));
+        const fresh = [];
         for (const row of data.symbols || []) {
-          if (row.error || !row.all) sp.failed.push(row.symbol); else sp.rows.set(row.symbol, row);
+          if (row.error || !row.all) sp.failed.push(row.symbol); else { sp.rows.set(row.symbol, row); fresh.push(spRowView(row)); }
         }
+        scan.add(fresh);
       } catch (e) {
         lastErr = e.message || String(e);
         sp.failed.push(...batch);
@@ -891,6 +898,7 @@ async function spRun(only = null) {
   sp.running = false;
   $("sp-cancel").hidden = true; $("f-run").disabled = false; $("sp-progress").hidden = true;
   if (stopped) sp.failed.push(...queue.flat()); // never started: offer them in "Retry failed"
+  scan.finish(stopped);
   spRender();
   spRenderCharts();
   $("sp-status").className = sp.rows.size ? "status" : "status error";

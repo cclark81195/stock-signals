@@ -1,5 +1,6 @@
 // Account balance chart with a marker for every buy and sell (Swing Lab). Plain SVG, no dependencies.
 // The x axis is "days with activity" (weekends and quiet days squeezed out), so it can grow as a scan runs.
+import { fx } from "./swing-fx.js";
 export function makeTradeChart(card, h) {
   const { esc, money, sgn, price, qty, exitNames } = h;
   const q = (sel) => card.querySelector(sel);
@@ -68,12 +69,13 @@ export function makeTradeChart(card, h) {
     const padY = (hi - lo) * 0.1; hi += padY; lo -= padY;
     const Y = (v) => pt + (1 - (v - lo) / (hi - lo)) * (H - pt - pb);
 
-    let cur = startBal, d;
+    let cur = startBal, d, stratPts = null;
     if (bal.valueAt) {
       // daily line: the parked money moves every day
       const pts = shown.map((dt) => [dt, bal.valueAt(dt)]).filter(([, v]) => v != null);
       d = pts.length ? `M${pl},${Y(startBal).toFixed(1)} ` + pts.map(([dt, v]) => `L${X(dt).toFixed(1)},${Y(v).toFixed(1)}`).join(" ") : `M${pl},${Y(cur).toFixed(1)}`;
       if (pts.length) cur = pts[pts.length - 1][1];
+      stratPts = pts;
     } else {
       // step line: flat until a sale, then straight to the new balance
       d = `M${pl},${Y(cur).toFixed(1)}`;
@@ -84,6 +86,27 @@ export function makeTradeChart(card, h) {
         cur = e.balance;
       }
       d += ` L${W - pr},${Y(cur).toFixed(1)}`;
+    }
+    // ribbon between the portfolio and the S&P 500: green where the portfolio is ahead, red where it is behind
+    let ribbon = "";
+    if (fx.ribbon && stratPts && stratPts.length > 1 && spyPts.length > 1) {
+      const spyAt = new Map(spyPts);
+      const both = stratPts.filter(([dt]) => spyAt.has(dt)).map(([dt, v]) => ({ x: X(dt), s: Y(v), b: Y(spyAt.get(dt)), up: v >= spyAt.get(dt) }));
+      const flush = (run, up) => {
+        if (run.length < 2) return;
+        const top = run.map((q) => `${q.x.toFixed(1)},${q.s.toFixed(1)}`), bot = run.slice().reverse().map((q) => `${q.x.toFixed(1)},${q.b.toFixed(1)}`);
+        ribbon += `<polygon class="rib ${up ? "up" : "dn"}" points="${top.concat(bot).join(" ")}"></polygon>`;
+      };
+      let run = [];
+      for (const q of both) {
+        if (run.length && run[run.length - 1].up !== q.up) {
+          const a = run[run.length - 1], da = a.s - a.b, db = q.s - q.b, u = da / (da - db);
+          const x = { x: a.x + (q.x - a.x) * u, s: a.s + (q.s - a.s) * u }; x.b = x.s; x.up = a.up;
+          run.push(x); flush(run, a.up); run = [{ ...x, up: q.up }];
+        }
+        run.push(q);
+      }
+      flush(run, run.length ? run[run.length - 1].up : true);
     }
     const spyLine = spyPts.length > 1 ? `<polyline class="spy" points="${spyPts.map(([dt, v]) => `${X(dt).toFixed(1)},${Y(v).toFixed(1)}`).join(" ")}"></polyline>` : "";
 
@@ -109,7 +132,7 @@ export function makeTradeChart(card, h) {
     box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(bal.label)} over ${shown.length} days with ${showMarkers ? ev.length : "no"} buy and sell markers">
         <line class="grid" x1="${pl}" x2="${W - pr}" y1="${Y(hi).toFixed(1)}" y2="${Y(hi).toFixed(1)}"></line>
         <line class="grid" x1="${pl}" x2="${W - pr}" y1="${Y(lo).toFixed(1)}" y2="${Y(lo).toFixed(1)}"></line>
-        ${startLine}${spyLine}<path class="line" d="${d}"></path>${markers}
+        ${startLine}${ribbon}${spyLine}<path class="line${fx.ribbon ? " glow" : ""}" d="${d}"></path>${markers}
         <text class="lbl" x="${pl - 6}" y="${Y(hi).toFixed(1)}" text-anchor="end" dominant-baseline="hanging">${money(hi).replace(/\.\d\d$/, "")}</text>
         <text class="lbl" x="${pl - 6}" y="${Y(lo).toFixed(1)}" text-anchor="end">${money(lo).replace(/\.\d\d$/, "")}</text>${labels}</svg>`;
 
@@ -167,5 +190,7 @@ export function makeTradeChart(card, h) {
   const pick = (e) => { const m = e.target.closest(".mk"); if (m) select(Number(m.dataset.i)); };
   box.addEventListener("click", pick);
   box.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.closest(".mk")) { e.preventDefault(); pick(e); } });
-  return { render, reset, WINDOWS };
+  /** Draw again with the current effect switches (the ribbon turned on or off). */
+  function redraw() { if (bal.events.length) draw(); }
+  return { render, reset, redraw, WINDOWS };
 }
