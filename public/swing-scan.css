@@ -14,3 +14,28 @@
 .scan-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.78rem; color: var(--muted); }
 .scan-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .scan-legend .sq { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* effect switches */
+.scan-fx { display: grid; gap: 8px; }
+.fx-head { display: flex; align-items: center; gap: 12px; }
+.fx-head .scan-lbl { margin-right: auto; }
+.link-btn { appearance: none; background: none; border: 0; padding: 4px 0; font: inherit; font-size: 0.78rem; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.fx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.fx-sw { display: flex; align-items: center; gap: 9px; appearance: none; text-align: left; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font: inherit; font-size: 0.8rem; padding: 9px 10px; border-radius: 8px; }
+.fx-sw .trk { flex: none; width: 24px; height: 14px; border-radius: 999px; background: var(--border); position: relative; transition: background 0.15s; }
+.fx-sw .trk::after { content: ""; position: absolute; left: 2px; top: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transition: transform 0.15s, background 0.15s; }
+.fx-sw[aria-checked="true"] { color: var(--text); border-color: var(--accent); }
+.fx-sw[aria-checked="true"] .trk { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.fx-sw[aria-checked="true"] .trk::after { transform: translateX(10px); background: var(--accent); }
+
+/* rolling digits in the stat tiles */
+.dt-tile .v .od { display: inline-block; height: 1.1em; overflow: hidden; vertical-align: top; }
+.dt-tile .v .rl { display: flex; flex-direction: column; transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.dt-tile .v .rl i { display: block; font-style: normal; height: 1.1em; line-height: 1.1em; }
+.dt-tile .v:has(.od) { line-height: 1.1em; }
+
+/* ribbon between the portfolio and the S&P 500 on the balance chart */
+.bal-svg .rib.up { fill: var(--buy); opacity: 0.2; }
+.bal-svg .rib.dn { fill: var(--sell); opacity: 0.2; }
+.bal-svg .line.glow { filter: drop-shadow(0 0 4px var(--series-price)); }
+@media (prefers-reduced-motion: reduce) { .dt-tile .v .rl, .fx-sw .trk, .fx-sw .trk::after { transition: none; } }
