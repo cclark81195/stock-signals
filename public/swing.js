@@ -515,6 +515,16 @@ function renderRotYears(takenList) {
   }).join("");
 }
 
+/** One sphere row per stock that was ranked (including ones that never made the top group), with its trades as % returns. */
+function scanRows(r, rot) {
+  const sec = new Map(listNow().map((x) => [x.symbol, x.sector]));
+  return [...r.closes.keys()].map((symbol) => {
+    const list = rot.bySymbol.get(symbol) || [], n = list.length;
+    const avg = n ? list.reduce((a, t) => a + t.retPct, 0) / n : null;
+    return { symbol, sector: sec.get(symbol) || "", trades: n, winRate: n ? list.filter((t) => t.pnl > 0).length / n : null, exp: avg == null ? null : avg / 20, avgPct: avg, tradeList: list };
+  });
+}
+
 function renderRotation(final = false) {
   const r = sw.rot;
   if (!r.dates || !r.closes.size) { $("sw-results").hidden = true; return; }
@@ -528,6 +538,7 @@ function renderRotation(final = false) {
   if (final) renderVs(rows, acct);
   renderRotTiles(rot, rows, o, acct ? acct.rep.takenList : rot.trades);
   distChart.render(rot.trades.map((t) => ({ r: t.retPct, sym: t.symbol, date: t.date, exit: t.exitDate })));
+  scan.sync(scanRows(r, rot), { pct: true, live: sw.running && !final, total: sw.runStocks ? sw.runStocks.length : r.closes.size });
   renderPicks(rot, o);
   renderRotYears(acct ? acct.rep.takenList : rot.trades);
   renderTradeChart(rows, rot.trades, final, acct);
@@ -608,7 +619,7 @@ async function run(only = null) {
   sw.isRot = rotRun;
   sw.runStocks = sw.stocks;
   $("sw-scan").hidden = true;
-  if (!rotRun) { if (!only) scan.reset(symbols.length); else $("sw-scan").hidden = false; }
+  if (!only) scan.reset(symbols.length, { pct: rotRun }); else $("sw-scan").hidden = false;
   $("sw-rob-wrap").hidden = true; $("sw-rob-note").textContent = "";
   sw.bench = null; sw.benchErr = false; sw.vs = null;
   const benchP = rotRun ? Promise.resolve() : fetch(`/api/swing?bench=1&years=${encodeURIComponent(s.years)}`).then((r) => r.json().then((d) => { if (!r.ok) throw new Error(d.error || r.status); sw.bench = d.bench; })).catch(() => { sw.benchErr = true; });
@@ -664,8 +675,8 @@ async function run(only = null) {
   sw.running = false;
   $("sw-cancel").hidden = true; $("sw-run").disabled = false; $("sw-progress").hidden = true;
   if (stopped) sw.failed.push(...queue.flat());
-  if (!rotRun) scan.finish(stopped);
   draw(true);
+  scan.finish(stopped);
   $("sw-updated").textContent = `Last run ${new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
   const nDone = sw.isRot ? sw.rot.closes.size : sw.rows.size;
   $("sw-status").className = nDone ? "status" : "status error";
