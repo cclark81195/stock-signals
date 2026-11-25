@@ -7,6 +7,8 @@
 //   scan.reset(totalStocks)      // new run: clears the dots
 //   scan.add([{ symbol, sector, trades, winRate, exp, holdPct, tradeList: [{ side, date, exitDate, netR, holdBars, exitReason }] }])
 //   scan.finish(stopped)         // run over: the sphere keeps spinning
+//   scan.sync(rows, { pct: true, live, total })  // hold-the-top-ranked strategy: replace every dot with the current result (existing dots stay put).
+//     rows are { symbol, sector, trades, winRate, exp, avgPct, tradeList: [{ side, date, exitDate, retPct, holdBars, exitReason }] }; a result is a % return, not R.
 import { fx, onFx, buildFxPanel } from "./swing-fx.js";
 
 const TAU = Math.PI * 2, GA = Math.PI * (3 - Math.sqrt(5));
@@ -55,14 +57,15 @@ export function makeScan(host, fmt, opts = {}) {
   } catch { /* ignore */ }
 
   // per unit: dots plus parallel arrays. y = current latitude (eases), ty = target latitude, cs/sn = longitude trig
-  const mk = () => ({ dots: [], n: 0, cap: 0, y: null, ty: null, cs: null, sn: null, secCount: new Map(), bands: [] });
+  const mk = () => ({ dots: [], n: 0, cap: 0, y: null, ty: null, cs: null, sn: null, secCount: new Map(), bands: [], keep: 0, prevBorn: [] });
   const U = { trades: mk(), stocks: mk() };
   const cur = () => U[unit];
   function grow(u, need) {
     if (need <= u.cap) return;
-    const nc = Math.max(need, u.cap * 2, 1024), f = (old) => { const a = new Float32Array(nc); if (old) a.set(old.subarray(0, u.n)); return a; };
+    const nc = Math.max(need, u.cap * 2, 1024), f = (old) => { const a = new Float32Array(nc); if (old) a.set(old.subarray(0, Math.max(u.n, u.keep))); return a; };
     u.y = f(u.y); u.ty = f(u.ty); u.cs = f(u.cs); u.sn = f(u.sn); u.cap = nc;
   }
+  let pm = false;               // true: results are % returns (hold-the-top-ranked strategy) instead of R multiples
   let total = 0, state = "idle", doneAt = -1e9, startAt = 0, angle = 0.6, spin = 0, hov = -1, W = 0, H = 0, dpr = 1, visible = true, last = 0, readKey = "";
   const ptr = { x: 0, y: 0, on: false }; let ptrTimer = 0;
   let cap = 0, sx, sy, sz, sf, tx, ty;
@@ -97,9 +100,10 @@ export function makeScan(host, fmt, opts = {}) {
 
   // ---- colors
   function palette() { const m = cmode[unit]; return m === "hold" || m === "count" ? GRAD : unit === "trades" ? TRADE : DIV; }
+  const holdMax = () => (pm ? 126 : 30);   // days held that get the full color: a month for swing trades, about six months for a leaderboard
   function colorIdx(d) {
     if (unit === "trades") {
-      if (cmode.trades === "hold") return Math.round(clamp(d.hold / 30, 0, 1) * 20);
+      if (cmode.trades === "hold") return Math.round(clamp(d.hold / holdMax(), 0, 1) * 20);
       return 20 + Math.round(clamp(d.r / 2, -1, 1) * 20);
     }
     if (cmode.stocks === "win") return 20 + Math.round(clamp(((d.wr ?? 0.5) - 0.5) / 0.25, -1, 1) * 20);
@@ -109,14 +113,14 @@ export function makeScan(host, fmt, opts = {}) {
   function recolor() { for (const d of cur().dots) d.ci = colorIdx(d); }
   function drawControls() {
     unitEl.innerHTML = '<span class="scan-lbl">Each dot is a</span>' + units.map((k) => `<button type="button" data-u="${k}" aria-pressed="${k === unit}">${UNIT_NAMES[k]}</button>`).join("");
-    modeEl.innerHTML = '<span class="scan-lbl">Color by</span>' + MODES[unit].map(([k, n]) => `<button type="button" data-m="${k}" aria-pressed="${k === cmode[unit]}">${n}</button>`).join("");
+    modeEl.innerHTML = '<span class="scan-lbl">Color by</span>' + MODES[unit].map(([k, n]) => [k, pm && k === "exp" ? "Avg trade" : n]).map(([k, n]) => `<button type="button" data-m="${k}" aria-pressed="${k === cmode[unit]}">${n}</button>`).join("");
     const m = cmode[unit], dot = (c) => `<i class="sq" style="background:${c}"></i>`;
     legend.innerHTML = unit === "trades"
-      ? (m === "result" ? `<span>${dot("#38e3a6")}winning trade</span><span>${dot("#ff5f7e")}losing trade</span><span>brighter = bigger result (R)</span>` : `<span>${dot("#6f80ff")}short hold</span><span>${dot("#d35cff")}30+ days held</span>`)
-      : m === "exp" ? `<span>${dot("#38e3a6")}positive expectancy</span><span>${dot("#ff5f7e")}negative</span><span>size = trades</span>`
+      ? (m === "result" ? `<span>${dot("#38e3a6")}winning trade</span><span>${dot("#ff5f7e")}losing trade</span><span>${pm ? "brighter = bigger gain or loss" : "brighter = bigger result (R)"}</span>` : `<span>${dot("#6f80ff")}short hold</span><span>${dot("#d35cff")}${holdMax()}+ days held</span>`)
+      : m === "exp" ? `<span>${dot("#38e3a6")}${pm ? "positive average trade" : "positive expectancy"}</span><span>${dot("#ff5f7e")}negative</span><span>size = trades</span>`
         : m === "win" ? `<span>${dot("#38e3a6")}wins over 75%</span><span>${dot("#ff5f7e")}under 25%</span><span>size = trades</span>`
           : `<span>${dot("#6f80ff")}few trades</span><span>${dot("#d35cff")}many trades</span><span>size = trades</span>`;
-    cv.setAttribute("aria-label", unit === "trades" ? "Sphere with one dot for each trade found so far. Green made money, red lost." : "Sphere with one dot for each stock tested so far");
+    cv.setAttribute("aria-label", unit === "trades" ? "Sphere with one dot for each trade found so far. Green made money, red lost." : `Sphere with one dot for each stock ${pm ? "ranked" : "tested"} so far`);
   }
   unitEl.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-u]"); if (!b || b.dataset.u === unit) return;
@@ -152,13 +156,13 @@ export function makeScan(host, fmt, opts = {}) {
     if (hov >= 0 && u.dots[hov]) {
       const d = u.dots[hov];
       if (unit === "trades") {
-        setRead(`<b>${esc(d.sym)}</b> <span class="hint">${d.side === "short" ? "short" : "long"}${d.sector ? " · " + esc(d.sector) : ""}</span><br><b class="${d.r >= 0 ? "pos" : "neg"}">${sgn(d.r)}R</b> <span class="hint">· ${dayFmt(d.date)} to ${dayFmt(d.exit)}${d.hold != null ? " · held " + d.hold + " days" : ""}${d.reason ? " · " + esc(d.reason) : ""}</span>`, "ht" + hov);
+        setRead(`<b>${esc(d.sym)}</b> <span class="hint">${d.side === "short" ? "short" : "long"}${d.sector ? " · " + esc(d.sector) : ""}</span><br><b class="${d.r >= 0 ? "pos" : "neg"}">${pm ? sgn(d.pct, 1) + "%" : sgn(d.r) + "R"}</b> <span class="hint">· ${dayFmt(d.date)} to ${dayFmt(d.exit)}${d.hold != null ? " · held " + d.hold + " days" : ""}${d.reason ? " · " + esc(d.reason) : ""}</span>`, "ht" + hov);
       } else {
-        setRead(`<b>${esc(d.sym)}</b> <span class="hint">${d.sector ? esc(d.sector) + " · " : ""}${d.trades} trades${d.wr != null ? " · " + pct0(d.wr) + " wins" : ""}</span><br>Expectancy <b>${d.exp == null ? "-" : sgn(d.exp) + "R"}</b>${d.holdPct != null ? ` <span class="hint">· buy and hold ${sgn(d.holdPct, 1)}%</span>` : ""}`, "hs" + hov);
+        setRead(`<b>${esc(d.sym)}</b> <span class="hint">${d.sector ? esc(d.sector) + " · " : ""}${d.trades} trades${d.wr != null ? " · " + pct0(d.wr) + " wins" : ""}</span><br>${pm ? "Average trade" : "Expectancy"} <b>${pm ? (d.avgPct == null ? "-" : sgn(d.avgPct, 1) + "%") : d.exp == null ? "-" : sgn(d.exp) + "R"}</b>${d.holdPct != null ? ` <span class="hint">· buy and hold ${sgn(d.holdPct, 1)}%</span>` : ""}`, "hs" + hov);
       }
     } else if (state === "scan") {
       const lastD = U.stocks.dots[nS - 1];
-      setRead(`<span class="hint">Scanning</span> <b>${lastD ? esc(lastD.sym) : "..."}</b><br><span class="hint">${units.includes("trades") ? num(nT) + " trades found · " : ""}${nS} of ${total} stocks tested</span>`, "s" + nT + "/" + nS + "/" + total);
+      setRead(`<span class="hint">${pm ? "Ranking" : "Scanning"}</span> <b>${lastD ? esc(lastD.sym) : "..."}</b><br><span class="hint">${units.includes("trades") ? num(nT) + " trades found · " : ""}${nS} of ${total} stocks ${pm ? "ranked" : "tested"}</span>`, "s" + nT + "/" + nS + "/" + total);
     } else if (state === "done" || state === "stopped") {
       setRead(`<b>${state === "stopped" ? "Stopped" : "Scan complete"}</b> <span class="hint">· ${units.includes("trades") ? num(nT) + " trades across " : ""}${nS} stocks</span><br><span class="hint">Tap or hover a dot to inspect it.</span>`, state + nT + "/" + nS);
     } else setRead("", "idle");
@@ -332,25 +336,44 @@ export function makeScan(host, fmt, opts = {}) {
   function push(u, d) {
     grow(u, u.n + 1);
     d.ord = u.secCount.get(d.sector) || 0; u.secCount.set(d.sector, d.ord + 1);
-    u.y[u.n] = -1;                 // new dots slide up from the south pole into place
+    if (u.n < u.keep) d.born = u.prevBorn[u.n]; else u.y[u.n] = -1;   // new dots slide up from the south pole into place; during a sync the old ones stay where they were
     u.dots.push(d); u.n++;
   }
+  function addRows(rows) {
+    const now = performance.now();
+    for (const r of rows) {
+      const sector = r.sector || "";
+      push(U.stocks, { sym: r.symbol, sector, trades: r.trades || 0, wr: r.winRate, exp: r.exp, avgPct: r.avgPct, holdPct: r.holdPct, pos: (r.exp ?? 0) > 0, born: now, ci: 0 });
+      if (!units.includes("trades")) continue;
+      const list = [...(r.tradeList || [])].sort((a, b) => String(a.exitDate).localeCompare(String(b.exitDate)));
+      for (const t of list) {
+        // swing trades carry a result in R; leaderboard holdings carry a % return, shown on the same colour scale (10% is about 1R)
+        const pct = t.netR == null ? Number(t.retPct) || 0 : null, rr = pct == null ? Number(t.netR) || 0 : pct / 10;
+        push(U.trades, { sym: r.symbol, sector, side: t.side, date: t.date, exit: t.exitDate, r: rr, pct, pos: rr > 0, hold: t.holdBars, reason: t.exitReason, born: now, ci: 0 });
+      }
+    }
+    for (const k of Object.keys(U)) relayout(U[k]);
+    const un = cur(); for (let i = un.n - 1; i >= 0 && un.dots[i].born === now; i--) un.dots[i].ci = colorIdx(un.dots[i]);
+  }
   return {
-    reset(n) {
-      for (const k of Object.keys(U)) { const u = U[k]; u.dots.length = 0; u.n = 0; u.secCount = new Map(); u.bands = []; }
+    reset(n, o = {}) {
+      for (const k of Object.keys(U)) { const u = U[k]; u.dots.length = 0; u.n = 0; u.secCount = new Map(); u.bands = []; u.keep = 0; }
+      pm = !!o.pct; drawControls(); recolor();
       total = n; state = "scan"; startAt = performance.now(); hov = -1; readKey = ""; host.hidden = false; fit();
     },
-    add(rows) {
-      const now = performance.now();
-      for (const r of rows) {
-        const sector = r.sector || "";
-        push(U.stocks, { sym: r.symbol, sector, trades: r.trades || 0, wr: r.winRate, exp: r.exp, holdPct: r.holdPct, pos: (r.exp ?? 0) > 0, born: now, ci: 0 });
-        if (!units.includes("trades")) continue;
-        const list = [...(r.tradeList || [])].sort((a, b) => String(a.exitDate).localeCompare(String(b.exitDate)));
-        for (const t of list) { const rr = Number(t.netR) || 0; push(U.trades, { sym: r.symbol, sector, side: t.side, date: t.date, exit: t.exitDate, r: rr, pos: rr > 0, hold: t.holdBars, reason: t.exitReason, born: now, ci: 0 }); }
-      }
-      for (const k of Object.keys(U)) relayout(U[k]);
-      const un = cur(); for (let i = un.n - 1; i >= 0 && un.dots[i].born === now; i--) un.dots[i].ci = colorIdx(un.dots[i]);
+    add(rows) { addRows(rows); },
+    sync(rows, o = {}) {
+      // The hold-the-top-ranked strategy re-ranks every stock each time more prices arrive, so earlier trades can change.
+      // Replace everything with the current answer, but let the dots that already exist keep their place on the sphere.
+      const wasPm = pm; pm = o.pct !== false;
+      for (const k of Object.keys(U)) { const u = U[k]; u.prevBorn = u.dots.map((d) => d.born); u.keep = u.n; u.dots.length = 0; u.n = 0; u.secCount = new Map(); u.bands = []; }
+      if (o.total != null) total = o.total;
+      if (o.live) { if (state !== "scan") { state = "scan"; startAt = performance.now(); } } else if (state === "scan" || state === "idle") state = "done";
+      host.hidden = false; if (!W) fit();
+      addRows(rows);
+      for (const k of Object.keys(U)) U[k].keep = 0;
+      if (wasPm !== pm) drawControls();
+      recolor(); readKey = "";
     },
     finish(stopped) { state = stopped ? "stopped" : "done"; doneAt = performance.now(); },
     count: () => cur().n,
